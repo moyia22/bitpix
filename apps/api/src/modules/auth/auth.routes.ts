@@ -70,6 +70,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(204).send();
   });
 
+  app.get("/auth/mfa/status", { preHandler: authenticate }, async (request) => {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: request.auth!.userId },
+      select: { mfaEnabled: true },
+    });
+    return { data: { enabled: user.mfaEnabled } };
+  });
+
   app.get("/auth/me", { preHandler: authenticate }, async (request) => ({
     data: request.auth?.principal,
   }));
