@@ -39,4 +39,14 @@ describe("matrícula de 2FA no login do admin", () => {
     expect(login.statusCode).toBe(200);
     expect(login.json().data.mfaEnrollmentPending).toBe(true);
   });
+
+  it("bloqueia rota comum e libera /auth/me enquanto pende matrícula", async () => {
+    const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: adminEmail, password: adminPassword } });
+    const cookie = String(login.headers["set-cookie"]).split(";")[0];
+    const blocked = await app.inject({ method: "GET", url: "/api/v1/users", headers: { cookie } });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().error.code).toBe("MFA_ENROLLMENT_REQUIRED");
+    const me = await app.inject({ method: "GET", url: "/api/v1/auth/me", headers: { cookie } });
+    expect(me.statusCode).toBe(200);
+  });
 });

@@ -2,7 +2,7 @@ import type { PermissionKey, SessionPrincipal } from "@bitpix/contracts";
 import { AuditOutcome, CompanyStatus, prisma, UserStatus } from "@bitpix/database";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../../config/env.js";
-import { forbidden, unauthorized } from "../../lib/errors.js";
+import { AppError, forbidden, unauthorized } from "../../lib/errors.js";
 import { writeAudit } from "../../lib/audit.js";
 import { hashSessionToken } from "./auth.service.js";
 
@@ -92,6 +92,16 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
     permissions: new Set(permissionList),
     principal,
   };
+
+  const path = request.url.split("?")[0] ?? request.url;
+  const enrollmentAllow = ["/api/v1/auth/mfa/setup", "/api/v1/auth/mfa/confirm", "/api/v1/auth/me", "/api/v1/auth/logout"];
+  const resetAllow = ["/api/v1/auth/password/change", "/api/v1/auth/me", "/api/v1/auth/logout"];
+  if (principal.mfaEnrollmentPending && !enrollmentAllow.includes(path)) {
+    throw new AppError(403, "MFA_ENROLLMENT_REQUIRED", "Configure o 2FA para continuar.");
+  }
+  if (principal.mustResetPassword && !resetAllow.includes(path)) {
+    throw new AppError(403, "PASSWORD_CHANGE_REQUIRED", "Redefina sua senha para continuar.");
+  }
 
   if (now.getTime() - session.lastSeenAt.getTime() > 5 * 60 * 1000) {
     await prisma.userSession.update({ where: { id: session.id }, data: { lastSeenAt: now } });
