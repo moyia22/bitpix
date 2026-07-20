@@ -1,0 +1,43 @@
+# =====================================================================
+# BitPix — Deploy (staging automático, produção com aprovação manual)
+# NÃO publica em produção a cada push. Produção exige environment
+# protegido com revisão manual. Segredos vêm de GitHub Environments.
+# =====================================================================
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente alvo"
+        type: choice
+        options: [staging, production]
+        default: staging
+  push:
+    tags: ["v*"]   # tags de release seguem para staging automaticamente
+
+jobs:
+  deploy-staging:
+    if: github.event_name == 'push' || github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment: staging          # segredos e regras do ambiente 'staging'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy em staging
+        run: echo "Execute scripts/deploy.sh no host de staging via runner/SSH (ENVIRONMENT=staging)."
+      - name: Smoke tests
+        run: echo "Valide /health/ready, login, SSE e webhook após o deploy."
+
+  deploy-production:
+    if: github.event.inputs.environment == 'production'
+    needs: []
+    runs-on: ubuntu-latest
+    environment: production        # exige aprovação manual (proteção do environment)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Backup pré-deploy
+        run: echo "scripts/backup.sh no host de produção ANTES da migration."
+      - name: Deploy em produção
+        run: echo "ENVIRONMENT=production scripts/deploy.sh no host de produção."
+      - name: Smoke tests
+        run: echo "Valide health, login, SSE, webhook. Em falha: scripts/rollback.sh."

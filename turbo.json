@@ -1,0 +1,40 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "APP_ENV",
+    "APP_URL",
+    "API_URL",
+    "NEXT_PUBLIC_API_URL",
+    "API_PORT",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "SESSION_COOKIE_NAME",
+    "SESSION_TTL_HOURS",
+    "SEED_ADMIN_EMAIL",
+    "SEED_ADMIN_PASSWORD"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "format:check": {
+      "cache": false
+    }
+  }
+}

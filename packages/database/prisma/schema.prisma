@@ -1,0 +1,1045 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+}
+
+enum CashRegisterStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CashSessionStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashMovementType {
+  OPENING_BALANCE
+  SUPPLY
+  WITHDRAWAL
+  PIX_PAYMENT
+  PIX_REFUND
+  ADJUSTMENT
+  CLOSING_ADJUSTMENT
+}
+
+enum CashMovementDirection {
+  CREDIT
+  DEBIT
+}
+
+enum CashMovementSourceType {
+  MANUAL
+  PAYMENT
+  SYSTEM
+  PIX_PAYMENT
+  PIX_REFUND
+}
+
+enum SaleStatus {
+  DRAFT
+  WAITING_PAYMENT
+  PROCESSING
+  PAID
+  EXPIRED
+  CANCELED
+  FAILED
+  VALUE_MISMATCH
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum ProviderName {
+  MERCADO_PAGO
+}
+
+enum ProviderEnvironment {
+  TEST
+  PRODUCTION
+}
+
+enum ProviderConfigurationStatus {
+  NOT_CONFIGURED
+  CONFIGURING
+  CONNECTED
+  INVALID_TOKEN
+  REVOKED
+  TEMPORARY_FAILURE
+  PERMISSION_ERROR
+  WEBHOOK_MISSING
+  OPERATIONAL
+}
+
+enum PixChargeStatus {
+  CREATING
+  WAITING_PAYMENT
+  PROCESSING
+  PAID
+  EXPIRED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FAILED
+  VALUE_MISMATCH
+  UNDER_REVIEW
+}
+
+enum PixChargeStatusSource {
+  USER
+  PROVIDER
+  WEBHOOK
+  SYSTEM
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  SIGNATURE_VALID
+  SIGNATURE_INVALID
+  QUEUED
+  PROCESSING
+  PROCESSED
+  IGNORED
+  FAILED
+  RETRYING
+  DEAD_LETTER
+  DUPLICATE
+}
+
+enum WebhookSignatureStatus {
+  VALID
+  INVALID
+  NOT_CONFIGURED
+}
+
+enum PrintPaperWidth {
+  MM58
+  MM80
+}
+
+enum PrintJobStatus {
+  CREATED
+  PRINTED
+  FAILED
+}
+
+enum PrintJobType {
+  PIX_CHARGE_TICKET
+  PIX_PAYMENT_RECEIPT
+}
+
+enum PixPaymentStatus {
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum PixRefundStatus {
+  REQUESTED
+  PROCESSING
+  PROCESSED
+  FAILED
+  CANCELLED
+}
+
+enum NotificationType {
+  PAYMENT_CONFIRMED
+  PAYMENT_VALUE_MISMATCH
+  PAYMENT_AFTER_CASH_CLOSE
+  WEBHOOK_UNRESOLVED
+  WEBHOOK_DEAD_LETTER
+  CASH_CLOSED_WITH_PENDING_CHARGES
+  EXPORT_COMPLETED
+  EXPORT_FAILED
+  INTEGRATION_UNAVAILABLE
+  SUSPICIOUS_ACCESS
+  COMPANY_LIMIT_NEAR
+  QUEUE_UNAVAILABLE
+  CASH_DISCREPANCY
+}
+
+enum NotificationStatus {
+  OPEN
+  READ
+  RESOLVED
+}
+
+enum PlanStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BillingPeriod {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum ExportFormat {
+  CSV
+  XLSX
+  PDF
+}
+
+enum ExportJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum ExportReportType {
+  SALES
+  PAYMENTS
+  CHARGES
+  CASH_SESSIONS
+  CASH_MOVEMENTS
+  RECONCILIATION
+  AUDIT
+}
+
+enum StoredFilePurpose {
+  COMPANY_LOGO
+  REPORT_EXPORT
+}
+
+model Company {
+  id                     String                  @id @default(cuid())
+  publicId               String                  @unique @default(uuid()) @db.Uuid
+  legalName              String                  @db.VarChar(180)
+  displayName            String                  @db.VarChar(120)
+  slug                   String                  @unique @db.VarChar(80)
+  status                 CompanyStatus           @default(ACTIVE)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  paymentSoundEnabled    Boolean                 @default(true)
+  timezone               String                  @default("America/Sao_Paulo") @db.VarChar(80)
+  planId                 String?
+  branches               Branch[]
+  users                  User[]
+  roles                  Role[]
+  userRoles              UserRole[]
+  rolePermissions        RolePermission[]
+  sessions               UserSession[]
+  auditLogs              AuditLog[]
+  cashRegisters          CashRegister[]
+  cashSessions           CashSession[]
+  cashMovements          CashMovement[]
+  sales                  Sale[]
+  providerConfigurations ProviderConfiguration[]
+  pixCharges             PixCharge[]
+  webhookEvents          WebhookEvent[]
+  printJobs              PrintJob[]
+  pixPayments            PixPayment[]
+  pixRefunds             PixRefund[]
+  notifications          Notification[]
+  plan                   Plan?                   @relation(fields: [planId], references: [id], onDelete: SetNull)
+  subscription           Subscription?
+  setting                CompanySetting?
+  printTemplates         PrintTemplate[]
+  storedFiles            StoredFile[]
+  exportJobs             ExportJob[]
+}
+
+model Branch {
+  id             String          @id @default(cuid())
+  publicId       String          @unique @default(uuid()) @db.Uuid
+  companyId      String
+  code           String          @db.VarChar(20)
+  name           String          @db.VarChar(120)
+  active         Boolean         @default(true)
+  timezone       String?         @db.VarChar(80)
+  addressLine1   String?         @db.VarChar(180)
+  addressLine2   String?         @db.VarChar(180)
+  city           String?         @db.VarChar(100)
+  state          String?         @db.Char(2)
+  postalCode     String?         @db.VarChar(12)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  users          User[]
+  auditLogs      AuditLog[]
+  cashRegisters  CashRegister[]
+  cashSessions   CashSession[]
+  cashMovements  CashMovement[]
+  sales          Sale[]
+  pixCharges     PixCharge[]
+  printJobs      PrintJob[]
+  pixPayments    PixPayment[]
+  notifications  Notification[]
+  setting        BranchSetting?
+  printTemplates PrintTemplate[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+}
+
+model User {
+  id                   String                   @id @default(cuid())
+  publicId             String                   @unique @default(uuid()) @db.Uuid
+  companyId            String
+  branchId             String?
+  name                 String                   @db.VarChar(120)
+  email                String                   @unique @db.VarChar(180)
+  normalizedEmail      String                   @unique @db.VarChar(180)
+  passwordHash         String
+  status               UserStatus               @default(ACTIVE)
+  failedLoginAttempts  Int                      @default(0)
+  lockedUntil          DateTime?
+  lastLoginAt          DateTime?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  paymentSoundEnabled  Boolean                  @default(true)
+  isPlatformAdmin      Boolean                  @default(false)
+  mustResetPassword    Boolean                  @default(false)
+  mfaEnabled           Boolean                  @default(false)
+  mfaSecretCiphertext  String?                  @db.Text
+  mfaSecretIv          String?                  @db.VarChar(32)
+  mfaSecretAuthTag     String?                  @db.VarChar(64)
+  mfaConfirmedAt       DateTime?
+  recoveryCodesVersion Int                      @default(0)
+  company              Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch               Branch?                  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  roles                UserRole[]
+  sessions             UserSession[]
+  auditLogs            AuditLog[]
+  operatedCashSessions CashSession[]            @relation("CashSessionOperator")
+  closedCashSessions   CashSession[]            @relation("CashSessionCloser")
+  createdCashMovements CashMovement[]
+  sales                Sale[]
+  configuredProviders  ProviderConfiguration[]  @relation("ProviderConfiguredBy")
+  updatedProviders     ProviderConfiguration[]  @relation("ProviderUpdatedBy")
+  pixChargeHistory     PixChargeStatusHistory[]
+  printJobs            PrintJob[]
+  requestedRefunds     PixRefund[]
+  preference           UserPreference?
+  exportJobs           ExportJob[]
+  mfaRecoveryCodes     MfaRecoveryCode[]
+  passwordResetTokens  PasswordResetToken[]
+
+  @@index([companyId, status])
+  @@index([branchId])
+}
+
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @db.Char(64)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@index([userId, usedAt])
+}
+
+model PasswordResetToken {
+  id          String    @id @default(cuid())
+  publicId    String    @unique @default(uuid()) @db.Uuid
+  userId      String
+  tokenHash   String    @unique @db.Char(64)
+  requestedIp String?   @db.VarChar(64)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt, usedAt])
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  publicId    String           @unique @default(uuid()) @db.Uuid
+  companyId   String
+  key         String           @db.VarChar(50)
+  name        String           @db.VarChar(80)
+  isSystem    Boolean          @default(false)
+  active      Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@unique([companyId, key])
+  @@index([companyId])
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  key         String           @unique @db.VarChar(80)
+  name        String           @db.VarChar(100)
+  description String           @db.VarChar(240)
+  createdAt   DateTime         @default(now())
+  roles       RolePermission[]
+}
+
+model UserRole {
+  id         String   @id @default(cuid())
+  companyId  String
+  userId     String
+  roleId     String
+  assignedAt DateTime @default(now())
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([companyId, userId])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  companyId    String
+  roleId       String
+  permissionId String
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([companyId, roleId])
+}
+
+model UserSession {
+  id         String    @id @default(cuid())
+  publicId   String    @unique @default(uuid()) @db.Uuid
+  companyId  String
+  userId     String
+  tokenHash  String    @unique @db.Char(64)
+  ipAddress  String?   @db.VarChar(64)
+  userAgent  String?   @db.VarChar(320)
+  expiresAt  DateTime
+  lastSeenAt DateTime  @default(now())
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, userId])
+  @@index([expiresAt, revokedAt])
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  publicId       String       @unique @default(uuid()) @db.Uuid
+  companyId      String?
+  branchId       String?
+  userId         String?
+  action         String       @db.VarChar(100)
+  entity         String       @db.VarChar(80)
+  entityPublicId String?      @db.VarChar(80)
+  outcome        AuditOutcome
+  ipAddress      String?      @db.VarChar(64)
+  userAgent      String?      @db.VarChar(320)
+  correlationId  String       @db.Uuid
+  before         Json?
+  after          Json?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  company        Company?     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch         Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  actor          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([correlationId])
+}
+
+model CashRegister {
+  id           String             @id @default(cuid())
+  publicId     String             @unique @default(uuid()) @db.Uuid
+  companyId    String
+  branchId     String
+  code         String             @db.VarChar(30)
+  name         String             @db.VarChar(100)
+  description  String?            @db.VarChar(240)
+  status       CashRegisterStatus @default(ACTIVE)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  company      Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch       Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  cashSessions CashSession[]
+
+  @@unique([companyId, branchId, code])
+  @@index([companyId, status])
+  @@index([branchId, status])
+  @@index([createdAt])
+}
+
+model CashSession {
+  id                       String            @id @default(cuid())
+  publicId                 String            @unique @default(uuid()) @db.Uuid
+  companyId                String
+  branchId                 String
+  cashRegisterId           String
+  operatorId               String
+  closedByUserId           String?
+  status                   CashSessionStatus @default(OPEN)
+  openingBalance           Decimal           @map("openingAmount") @db.Decimal(18, 2)
+  expectedBalance          Decimal?          @db.Decimal(18, 2)
+  countedBalance           Decimal?          @map("closingAmount") @db.Decimal(18, 2)
+  discrepancy              Decimal?          @db.Decimal(18, 2)
+  openingNote              String?           @db.VarChar(500)
+  closingNote              String?           @db.VarChar(500)
+  openedAt                 DateTime          @default(now())
+  closedAt                 DateTime?
+  closedWithPendingCharges Boolean           @default(false)
+  hasPostCloseAdjustment   Boolean           @default(false)
+  postCloseAdjustmentAt    DateTime?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @default(now()) @updatedAt
+  company                  Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch                   Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  cashRegister             CashRegister      @relation(fields: [cashRegisterId], references: [id], onDelete: Restrict)
+  operator                 User              @relation("CashSessionOperator", fields: [operatorId], references: [id], onDelete: Restrict)
+  closedBy                 User?             @relation("CashSessionCloser", fields: [closedByUserId], references: [id], onDelete: Restrict)
+  movements                CashMovement[]
+  sales                    Sale[]
+  pixCharges               PixCharge[]
+  pixPayments              PixPayment[]
+
+  @@index([companyId, status])
+  @@index([branchId, openedAt])
+  @@index([cashRegisterId, status])
+  @@index([operatorId, openedAt])
+  @@index([status, createdAt])
+}
+
+model CashMovement {
+  id              String                 @id @default(cuid())
+  publicId        String                 @unique @default(uuid()) @db.Uuid
+  companyId       String
+  branchId        String
+  cashSessionId   String
+  type            CashMovementType
+  direction       CashMovementDirection
+  amount          Decimal                @db.Decimal(18, 2)
+  reason          String                 @db.VarChar(160)
+  note            String?                @db.VarChar(500)
+  sourceType      CashMovementSourceType
+  sourceId        String?                @db.VarChar(120)
+  createdByUserId String
+  createdAt       DateTime               @default(now())
+  company         Company                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch          Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  cashSession     CashSession            @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  createdBy       User                   @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, sourceType, sourceId])
+  @@index([companyId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([cashSessionId, createdAt])
+  @@index([createdByUserId, createdAt])
+  @@index([type, createdAt])
+}
+
+model Sale {
+  id            String       @id @default(cuid())
+  publicId      String       @unique @default(uuid()) @db.Uuid
+  companyId     String
+  branchId      String
+  cashSessionId String?
+  operatorId    String
+  saleCode      String       @map("code") @db.VarChar(64)
+  description   String?      @db.VarChar(240)
+  amount        Decimal      @db.Decimal(18, 2)
+  currency      String       @default("BRL") @db.Char(3)
+  status        SaleStatus   @default(DRAFT)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch        Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  cashSession   CashSession? @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  operator      User         @relation(fields: [operatorId], references: [id], onDelete: Restrict)
+  pixCharges    PixCharge[]
+  pixPayment    PixPayment?
+
+  @@index([companyId, saleCode])
+  @@index([companyId, status, createdAt])
+  @@index([branchId, createdAt])
+  @@index([cashSessionId])
+  @@index([operatorId, createdAt])
+}
+
+model ProviderConfiguration {
+  id                      String                      @id @default(cuid())
+  publicId                String                      @unique @default(uuid()) @db.Uuid
+  companyId               String
+  provider                ProviderName
+  environment             ProviderEnvironment         @default(TEST)
+  status                  ProviderConfigurationStatus @default(NOT_CONFIGURED)
+  credentialCiphertext    String?                     @db.Text
+  credentialIv            String?                     @db.VarChar(32)
+  credentialAuthTag       String?                     @db.VarChar(64)
+  credentialKeyVersion    Int                         @default(1)
+  credentialMasked        String?                     @db.VarChar(80)
+  webhookSecretCiphertext String?                     @db.Text
+  webhookSecretIv         String?                     @db.VarChar(32)
+  webhookSecretAuthTag    String?                     @db.VarChar(64)
+  webhookSecretMasked     String?                     @db.VarChar(80)
+  pixExpirationMinutes    Int                         @default(30)
+  lastVerifiedAt          DateTime?
+  lastVerificationError   String?                     @db.VarChar(240)
+  configuredByUserId      String?
+  updatedByUserId         String?
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
+  company                 Company                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  configuredBy            User?                       @relation("ProviderConfiguredBy", fields: [configuredByUserId], references: [id], onDelete: SetNull)
+  updatedBy               User?                       @relation("ProviderUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  pixCharges              PixCharge[]
+
+  @@unique([companyId, provider])
+  @@index([companyId, status])
+}
+
+model PixCharge {
+  id                        String                   @id @default(cuid())
+  publicId                  String                   @unique @default(uuid()) @db.Uuid
+  companyId                 String
+  branchId                  String
+  saleId                    String
+  cashSessionId             String
+  providerConfigurationId   String
+  provider                  ProviderName
+  providerOrderId           String?                  @db.VarChar(120)
+  providerPaymentId         String?                  @db.VarChar(120)
+  externalReference         String                   @db.VarChar(120)
+  idempotencyKey            String                   @unique @db.Uuid
+  amount                    Decimal                  @db.Decimal(18, 2)
+  currency                  String                   @default("BRL") @db.Char(3)
+  status                    PixChargeStatus          @default(CREATING)
+  qrCodeText                String?                  @db.Text
+  qrCodeBase64              String?                  @db.Text
+  ticketUrl                 String?                  @db.Text
+  expiresAt                 DateTime
+  paidAt                    DateTime?
+  providerCreatedAt         DateTime?
+  providerUpdatedAt         DateTime?
+  expectedAmount            Decimal?                 @db.Decimal(18, 2)
+  receivedAmount            Decimal?                 @db.Decimal(18, 2)
+  cancelledAt               DateTime?
+  lastProviderCheckAt       DateTime?
+  providerResponseSanitized Json?
+  lastError                 String?                  @db.VarChar(240)
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+  company                   Company                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch                    Branch                   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  sale                      Sale                     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  cashSession               CashSession              @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  providerConfiguration     ProviderConfiguration    @relation(fields: [providerConfigurationId], references: [id], onDelete: Restrict)
+  statusHistory             PixChargeStatusHistory[]
+  webhookAttempts           WebhookAttempt[]
+  printJobs                 PrintJob[]
+  payment                   PixPayment?
+  webhookEvents             WebhookEvent[]
+
+  @@unique([provider, providerOrderId])
+  @@unique([provider, providerPaymentId])
+  @@index([companyId, status, createdAt])
+  @@index([companyId, externalReference])
+  @@index([branchId, createdAt])
+  @@index([saleId])
+  @@index([cashSessionId])
+  @@index([providerOrderId])
+}
+
+model PixChargeStatusHistory {
+  id              String                @id @default(cuid())
+  pixChargeId     String
+  companyId       String
+  previousStatus  PixChargeStatus?
+  status          PixChargeStatus
+  source          PixChargeStatusSource
+  providerEventId String?               @db.VarChar(120)
+  userId          String?
+  reason          String?               @db.VarChar(240)
+  createdAt       DateTime              @default(now())
+  pixCharge       PixCharge             @relation(fields: [pixChargeId], references: [id], onDelete: Cascade)
+  user            User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([pixChargeId, providerEventId])
+  @@index([companyId, createdAt])
+  @@index([pixChargeId, createdAt])
+}
+
+model WebhookEvent {
+  id               String                 @id @default(cuid())
+  publicId         String                 @unique @default(uuid()) @db.Uuid
+  companyId        String?
+  pixChargeId      String?
+  provider         ProviderName
+  externalEventId  String?                @db.VarChar(120)
+  requestId        String?                @db.VarChar(120)
+  correlationId    String                 @db.Uuid
+  fingerprint      String                 @unique @db.Char(64)
+  headersSanitized Json
+  rawBody          String                 @db.Text
+  rawBodyHash      String                 @db.Char(64)
+  status           WebhookEventStatus     @default(RECEIVED)
+  signatureStatus  WebhookSignatureStatus
+  signatureValid   Boolean?
+  attemptCount     Int                    @default(0)
+  nextRetryAt      DateTime?
+  deadLetterReason String?                @db.VarChar(240)
+  processingError  String?                @db.VarChar(240)
+  receivedAt       DateTime               @default(now())
+  processedAt      DateTime?
+  company          Company?               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  pixCharge        PixCharge?             @relation(fields: [pixChargeId], references: [id], onDelete: SetNull)
+  attempts         WebhookAttempt[]
+
+  @@unique([provider, externalEventId])
+  @@index([companyId, receivedAt])
+  @@index([provider, status, receivedAt])
+  @@index([externalEventId])
+  @@index([pixChargeId, receivedAt])
+  @@index([status, nextRetryAt])
+}
+
+model WebhookAttempt {
+  id             String       @id @default(cuid())
+  webhookEventId String
+  pixChargeId    String?
+  attemptNumber  Int
+  outcome        String       @db.VarChar(40)
+  message        String?      @db.VarChar(240)
+  correlationId  String       @db.Uuid
+  startedAt      DateTime     @default(now())
+  finishedAt     DateTime?
+  durationMs     Int?
+  retryable      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  webhookEvent   WebhookEvent @relation(fields: [webhookEventId], references: [id], onDelete: Cascade)
+  pixCharge      PixCharge?   @relation(fields: [pixChargeId], references: [id], onDelete: SetNull)
+
+  @@unique([webhookEventId, attemptNumber])
+  @@index([pixChargeId, createdAt])
+}
+
+model PrintJob {
+  id           String          @id @default(cuid())
+  publicId     String          @unique @default(uuid()) @db.Uuid
+  companyId    String
+  branchId     String
+  pixChargeId  String?
+  pixPaymentId String?
+  userId       String
+  type         PrintJobType    @default(PIX_CHARGE_TICKET)
+  paperWidth   PrintPaperWidth
+  status       PrintJobStatus  @default(CREATED)
+  reprintOfId  String?
+  createdAt    DateTime        @default(now())
+  printedAt    DateTime?
+  company      Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch       Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  pixCharge    PixCharge?      @relation(fields: [pixChargeId], references: [id], onDelete: Restrict)
+  pixPayment   PixPayment?     @relation(fields: [pixPaymentId], references: [id], onDelete: Restrict)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  reprintOf    PrintJob?       @relation("PrintJobReprints", fields: [reprintOfId], references: [id], onDelete: SetNull)
+  reprints     PrintJob[]      @relation("PrintJobReprints")
+
+  @@index([companyId, createdAt])
+  @@index([pixChargeId, createdAt])
+  @@index([userId, createdAt])
+  @@index([pixPaymentId, createdAt])
+}
+
+model PixPayment {
+  id                        String           @id @default(cuid())
+  publicId                  String           @unique @default(uuid()) @db.Uuid
+  companyId                 String
+  branchId                  String
+  pixChargeId               String           @unique
+  saleId                    String           @unique
+  cashSessionId             String
+  provider                  ProviderName
+  providerPaymentId         String           @db.VarChar(120)
+  providerOrderId           String?          @db.VarChar(120)
+  externalReference         String           @db.VarChar(120)
+  amount                    Decimal          @db.Decimal(18, 2)
+  currency                  String           @default("BRL") @db.Char(3)
+  status                    PixPaymentStatus @default(PAID)
+  paidAt                    DateTime
+  providerCreatedAt         DateTime?
+  providerUpdatedAt         DateTime?
+  payerDataSanitized        Json?
+  providerResponseSanitized Json?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+  company                   Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch                    Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  pixCharge                 PixCharge        @relation(fields: [pixChargeId], references: [id], onDelete: Restrict)
+  sale                      Sale             @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  cashSession               CashSession      @relation(fields: [cashSessionId], references: [id], onDelete: Restrict)
+  refunds                   PixRefund[]
+  printJobs                 PrintJob[]
+
+  @@unique([provider, providerPaymentId])
+  @@index([companyId, paidAt])
+  @@index([branchId, paidAt])
+  @@index([cashSessionId, paidAt])
+  @@index([externalReference])
+}
+
+model PixRefund {
+  id                        String          @id @default(cuid())
+  publicId                  String          @unique @default(uuid()) @db.Uuid
+  companyId                 String
+  pixPaymentId              String
+  providerRefundId          String?         @db.VarChar(120)
+  amount                    Decimal         @db.Decimal(18, 2)
+  status                    PixRefundStatus @default(REQUESTED)
+  requestedByUserId         String
+  reason                    String          @db.VarChar(240)
+  idempotencyKey            String          @unique @db.Uuid
+  requestedAt               DateTime        @default(now())
+  processedAt               DateTime?
+  providerResponseSanitized Json?
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
+  company                   Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  pixPayment                PixPayment      @relation(fields: [pixPaymentId], references: [id], onDelete: Restrict)
+  requestedBy               User            @relation(fields: [requestedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, providerRefundId])
+  @@index([pixPaymentId, createdAt])
+  @@index([companyId, status, createdAt])
+}
+
+model Notification {
+  id             String             @id @default(cuid())
+  publicId       String             @unique @default(uuid()) @db.Uuid
+  companyId      String
+  branchId       String?
+  type           NotificationType
+  status         NotificationStatus @default(OPEN)
+  title          String             @db.VarChar(120)
+  message        String             @db.VarChar(300)
+  entityType     String             @db.VarChar(80)
+  entityPublicId String?            @db.VarChar(120)
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+  readAt         DateTime?
+  resolvedAt     DateTime?
+  company        Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  branch         Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, createdAt])
+  @@index([entityType, entityPublicId])
+}
+
+model Plan {
+  id                 String         @id @default(cuid())
+  publicId           String         @unique @default(uuid()) @db.Uuid
+  key                String         @unique @db.VarChar(50)
+  name               String         @db.VarChar(100)
+  description        String         @db.VarChar(300)
+  price              Decimal        @db.Decimal(18, 2)
+  billingPeriod      BillingPeriod  @default(MONTHLY)
+  status             PlanStatus     @default(ACTIVE)
+  userLimit          Int
+  branchLimit        Int
+  cashRegisterLimit  Int
+  monthlyChargeLimit Int
+  monthlyExportLimit Int
+  features           String[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  companies          Company[]
+  subscriptions      Subscription[]
+}
+
+model Subscription {
+  id                  String             @id @default(cuid())
+  publicId            String             @unique @default(uuid()) @db.Uuid
+  companyId           String             @unique
+  planId              String
+  status              SubscriptionStatus @default(TRIAL)
+  currentPeriodStart  DateTime           @default(now())
+  currentPeriodEnd    DateTime
+  overrideUserLimit   Int?
+  overrideBranchLimit Int?
+  overrideCashLimit   Int?
+  overrideChargeLimit Int?
+  overrideExportLimit Int?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  company             Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  plan                Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([planId, status])
+}
+
+model CompanySetting {
+  id                           String   @id @default(cuid())
+  companyId                    String   @unique
+  defaultPixExpirationMinutes  Int      @default(30)
+  confirmBeforePix             Boolean  @default(false)
+  blockDuplicateCode           Boolean  @default(true)
+  codeUniquenessScope          String   @default("OPEN_CHARGES") @db.VarChar(30)
+  autoPrint                    Boolean  @default(false)
+  printAfterConfirmation       Boolean  @default(false)
+  autoReturnToSale             Boolean  @default(false)
+  autoReturnSeconds            Int      @default(5)
+  blockCloseWithPendingCharges Boolean  @default(true)
+  minSaleAmount                Decimal  @default(0.01) @db.Decimal(18, 2)
+  maxSaleAmount                Decimal  @default(999999999.99) @db.Decimal(18, 2)
+  dateFormat                   String   @default("dd/MM/yyyy") @db.VarChar(30)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  company                      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model BranchSetting {
+  id                           String   @id @default(cuid())
+  branchId                     String   @unique
+  defaultPixExpirationMinutes  Int?
+  autoPrint                    Boolean?
+  printAfterConfirmation       Boolean?
+  autoReturnToSale             Boolean?
+  autoReturnSeconds            Int?
+  blockCloseWithPendingCharges Boolean?
+  minSaleAmount                Decimal? @db.Decimal(18, 2)
+  maxSaleAmount                Decimal? @db.Decimal(18, 2)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+  branch                       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+}
+
+model UserPreference {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  theme                   String   @default("SYSTEM") @db.VarChar(20)
+  paymentSoundEnabled     Boolean  @default(true)
+  notificationPreferences Json?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PrintTemplate {
+  id                      String          @id @default(cuid())
+  publicId                String          @unique @default(uuid()) @db.Uuid
+  companyId               String
+  branchId                String?
+  scopeKey                String          @db.VarChar(80)
+  storeName               String          @db.VarChar(120)
+  title                   String          @default("Cobrança Pix") @db.VarChar(120)
+  messageAboveQr          String?         @db.VarChar(240)
+  messageBelowQr          String?         @db.VarChar(240)
+  footer                  String?         @db.VarChar(300)
+  paperWidth              PrintPaperWidth @default(MM80)
+  qrSize                  Int             @default(240)
+  alignment               String          @default("CENTER") @db.VarChar(10)
+  showSaleCode            Boolean         @default(true)
+  showAmount              Boolean         @default(true)
+  showPixCopyPaste        Boolean         @default(false)
+  showDate                Boolean         @default(true)
+  showTime                Boolean         @default(true)
+  showExpiration          Boolean         @default(true)
+  showOperator            Boolean         @default(false)
+  showCashRegister        Boolean         @default(false)
+  showTransactionId       Boolean         @default(true)
+  showNonFiscalDisclaimer Boolean         @default(true)
+  copies                  Int             @default(1)
+  cutSpacingMm            Int             @default(8)
+  autoPrint               Boolean         @default(false)
+  printAfterConfirmation  Boolean         @default(false)
+  autoReturnToSale        Boolean         @default(false)
+  paymentSoundEnabled     Boolean         @default(true)
+  logoFileId              String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  company                 Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch                  Branch?         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  logoFile                StoredFile?     @relation("PrintTemplateLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, scopeKey])
+  @@index([branchId])
+}
+
+model StoredFile {
+  id                String            @id @default(cuid())
+  publicId          String            @unique @default(uuid()) @db.Uuid
+  companyId         String
+  purpose           StoredFilePurpose
+  storageKey        String            @unique @db.VarChar(240)
+  originalName      String?           @db.VarChar(180)
+  mimeType          String            @db.VarChar(80)
+  sizeBytes         Int
+  sha256            String            @db.Char(64)
+  downloadTokenHash String?           @db.Char(64)
+  downloadExpiresAt DateTime?
+  createdAt         DateTime          @default(now())
+  expiresAt         DateTime?
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  logoTemplates     PrintTemplate[]   @relation("PrintTemplateLogo")
+  exportJob         ExportJob?        @relation("ExportOutput")
+
+  @@index([companyId, purpose, createdAt])
+  @@index([expiresAt])
+}
+
+model ExportJob {
+  id            String           @id @default(cuid())
+  publicId      String           @unique @default(uuid()) @db.Uuid
+  companyId     String
+  requestedById String
+  reportType    ExportReportType
+  format        ExportFormat
+  status        ExportJobStatus  @default(PENDING)
+  filters       Json
+  progress      Int              @default(0)
+  rowCount      Int?
+  outputFileId  String?          @unique
+  errorMessage  String?          @db.VarChar(240)
+  requestedAt   DateTime         @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  expiresAt     DateTime
+  company       Company          @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  requestedBy   User             @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+  outputFile    StoredFile?      @relation("ExportOutput", fields: [outputFileId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, requestedAt])
+  @@index([requestedById, requestedAt])
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique @db.VarChar(100)
+  value     Json
+  updatedAt DateTime @updatedAt
+}

@@ -1,0 +1,26 @@
+{
+  "name": "@bitpix/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/start.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/start.ts",
+    "start": "node dist/start.js",
+    "lint": "eslint src --max-warnings=0",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@bitpix/api": "0.1.0",
+    "@bitpix/database": "0.1.0",
+    "bullmq": "5.80.9",
+    "dotenv": "17.4.2",
+    "ioredis": "5.11.1"
+  },
+  "devDependencies": {
+    "tsx": "4.23.1",
+    "vitest": "4.1.10"
+  }
+}

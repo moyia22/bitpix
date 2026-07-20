@@ -1,0 +1,89 @@
+# =====================================================================
+# BitPix — override de STAGING (homologação)
+# Uso:
+#   docker compose -f docker-compose.yml -f docker-compose.staging.yml up -d
+# Espelha produção, porém adiciona MinIO (S3 compatível) para homologar
+# o armazenamento privado sem depender de nuvem.
+# =====================================================================
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  logging: *default-logging
+
+services:
+  postgres:
+    <<: *hardening
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+
+  redis:
+    <<: *hardening
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--requirepass", "${REDIS_PASSWORD:?defina REDIS_PASSWORD}"]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+
+  api:
+    <<: *hardening
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 640M }
+
+  worker:
+    <<: *hardening
+    deploy:
+      resources:
+        limits: { cpus: "0.75", memory: 512M }
+
+  web:
+    <<: *hardening
+    deploy:
+      resources:
+        limits: { cpus: "0.75", memory: 512M }
+
+  # MinIO — S3 privado para homologação do armazenamento.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    <<: *hardening
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?defina S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?defina S3_SECRET_KEY}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - bitpix_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+    networks: [bitpix_internal]
+
+  # Cria o bucket privado uma vez (perfil tools).
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        mc alias set local http://minio:9000 "${S3_ACCESS_KEY}" "${S3_SECRET_KEY}"
+        mc mb --ignore-existing local/"${S3_BUCKET:-bitpix-staging}"
+        mc anonymous set none local/"${S3_BUCKET:-bitpix-staging}"
+        echo "Bucket privado pronto."
+    profiles: [tools]
+    networks: [bitpix_internal]
+
+volumes:
+  bitpix_minio_data:

@@ -1,0 +1,96 @@
+# =====================================================================
+# BitPix — Integração Contínua
+# install -> lint -> typecheck -> test (com Postgres+Redis) -> e2e
+# -> build -> npm audit -> build de imagem -> scan Trivy.
+# Deploy é separado (deploy.yml) e NUNCA acontece a cada push.
+# =====================================================================
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: bitpix
+          POSTGRES_USER: bitpix
+          POSTGRES_PASSWORD: bitpix-ci
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U bitpix -d bitpix"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:8.2-alpine
+        ports: ["6380:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s
+          --health-timeout 3s --health-retries 20
+    env:
+      NODE_ENV: development
+      APP_ENV: development
+      APP_URL: http://localhost:3000
+      NEXT_PUBLIC_API_URL: http://localhost:3333
+      DATABASE_URL: postgresql://bitpix:bitpix-ci@localhost:5433/bitpix?schema=public
+      REDIS_URL: redis://localhost:6380
+      # Chave de teste (32 bytes base64) — NÃO é segredo de produção.
+      PROVIDER_CREDENTIALS_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      PAYMENT_PROVIDER_MODE: mock
+      WEBHOOK_LOCAL_FALLBACK: "true"
+      SEED_ADMIN_PASSWORD: ci-admin-pass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22.16", cache: "npm" }
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:deploy
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+      - name: Playwright browsers
+        run: npx playwright install --with-deps
+      - name: Seed + start apps for E2E
+        run: |
+          npm run db:seed
+          npm --workspace @bitpix/api run start & echo $! > /tmp/api.pid
+          npm --workspace @bitpix/web run start & echo $! > /tmp/web.pid
+          npx wait-on http://localhost:3333/health/live http://localhost:3000/login
+      - run: npm run test:e2e
+      - name: npm audit (produção)
+        run: npm audit --omit=dev --audit-level=high || true
+
+  image:
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (sem push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: bitpix:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scan de vulnerabilidades (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: bitpix:ci-${{ github.sha }}
+          format: table
+          exit-code: "0"          # não bloqueia; ajuste para "1" quando o baseline estiver limpo
+          severity: HIGH,CRITICAL

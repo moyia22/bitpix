@@ -1,0 +1,61 @@
+# =====================================================================
+# BitPix — regras de alerta (Prometheus)
+# Severidades: info | warning | critical
+# Métricas base expostas pela API: bitpix_dependency_health{dependency},
+# bitpix_http_requests_total, bitpix_http_request_duration_seconds,
+# bitpix_pending_charges_old, bitpix_* (payment metrics).
+# =====================================================================
+groups:
+  - name: bitpix-disponibilidade
+    rules:
+      - alert: ApiOffline
+        expr: up{job="bitpix-api"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "API BitPix offline"
+          description: "O scrape da API falha há mais de 1 minuto."
+
+      - alert: BancoOffline
+        expr: bitpix_dependency_health{dependency="database"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "PostgreSQL indisponível", description: "readiness reporta database=0." }
+
+      - alert: RedisOffline
+        expr: bitpix_dependency_health{dependency="redis"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "Redis indisponível", description: "Filas e SSE distribuído comprometidos." }
+
+      - alert: WorkerOffline
+        expr: bitpix_dependency_health{dependency="worker"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "Worker sem heartbeat", description: "Nenhum heartbeat do worker nos últimos 30s (processamento de webhooks/exportações parado)." }
+
+      - alert: FilaAcumulada
+        expr: bitpix_dependency_health{dependency="queue"} == 0
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Fila acumulando falhas", description: "Contagem de jobs falhos acima do limite saudável." }
+
+  - name: bitpix-negocio
+    rules:
+      - alert: CobrancasPendentesAntigas
+        expr: bitpix_pending_charges_old > 20
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Muitas cobranças pendentes antigas", description: "Mais de 20 cobranças pendentes há +15min — possível falha de confirmação." }
+
+      - alert: LatenciaAltaApi
+        expr: histogram_quantile(0.95, sum(rate(bitpix_http_request_duration_seconds_bucket[5m])) by (le)) > 1.5
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Latência p95 alta", description: "p95 de requisições acima de 1.5s por 10min." }
+
+      - alert: TaxaErro5xxAlta
+        expr: sum(rate(bitpix_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(bitpix_http_requests_total[5m])), 0.001) > 0.05
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: "Taxa de erro 5xx > 5%", description: "Erros de servidor acima de 5% do tráfego." }

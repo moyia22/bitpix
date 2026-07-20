@@ -1,0 +1,33 @@
+# =====================================================================
+# BitPix — configuração de scrape do Prometheus
+# A API expõe métricas em formato Prometheus no endpoint /health/metrics.
+# Suba com:  docker run -v ./deploy/observability:/etc/prometheus prom/prometheus
+# =====================================================================
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    app: bitpix
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []   # aponte para o alertmanager quando disponível
+
+scrape_configs:
+  - job_name: bitpix-api
+    metrics_path: /health/metrics
+    static_configs:
+      - targets: ["api:3333"]
+        labels: { service: api }
+
+  # Exporters opcionais (habilite ao adicionar os containers):
+  # - job_name: postgres
+  #   static_configs: [{ targets: ["postgres-exporter:9187"] }]
+  # - job_name: redis
+  #   static_configs: [{ targets: ["redis-exporter:9121"] }]
+  # - job_name: node
+  #   static_configs: [{ targets: ["node-exporter:9100"] }]

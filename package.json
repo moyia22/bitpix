@@ -1,0 +1,41 @@
+{
+  "name": "bitpix",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@10.9.2",
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10.8.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "playwright test",
+    "format:check": "turbo run format:check",
+    "db:generate": "npm --workspace @bitpix/database run generate",
+    "db:migrate": "npm --workspace @bitpix/database run migrate",
+    "db:deploy": "npm --workspace @bitpix/database run deploy",
+    "db:seed": "npm --workspace @bitpix/database run seed",
+    "db:studio": "npm --workspace @bitpix/database run studio"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@playwright/test": "1.61.1",
+    "@types/node": "26.1.1",
+    "eslint": "9.39.2",
+    "turbo": "2.10.5",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.64.0"
+  },
+  "overrides": {
+    "@hono/node-server": "1.19.13",
+    "postcss": "8.5.20"
+  }
+}

@@ -1,0 +1,139 @@
+name: bitpix
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  APP_ENV: development
+  APP_URL: http://localhost:3000
+  API_URL: http://api:3333
+  NEXT_PUBLIC_API_URL: http://localhost:3333
+  API_PORT: 3333
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+  REDIS_URL: redis://redis:6379
+  SESSION_COOKIE_NAME: bitpix_session
+  SESSION_TTL_HOURS: 8
+  PROVIDER_CREDENTIALS_ENCRYPTION_KEY: ${PROVIDER_CREDENTIALS_ENCRYPTION_KEY}
+  PAYMENT_PROVIDER_MODE: ${PAYMENT_PROVIDER_MODE:-mock}
+  PAYMENT_PROVIDER_TIMEOUT_MS: ${PAYMENT_PROVIDER_TIMEOUT_MS:-8000}
+  MERCADO_PAGO_API_BASE_URL: ${MERCADO_PAGO_API_BASE_URL:-https://api.mercadopago.com}
+  MERCADO_PAGO_WEBHOOK_SECRET: ${MERCADO_PAGO_WEBHOOK_SECRET:-}
+  PUBLIC_WEBHOOK_BASE_URL: ${PUBLIC_WEBHOOK_BASE_URL:-http://localhost:3333}
+  WEBHOOK_LOCAL_FALLBACK: "false"
+  WEBHOOK_SIGNATURE_TOLERANCE_SECONDS: ${WEBHOOK_SIGNATURE_TOLERANCE_SECONDS:-300}
+  WEBHOOK_MAX_ATTEMPTS: ${WEBHOOK_MAX_ATTEMPTS:-8}
+  SSE_MAX_CONNECTIONS_PER_USER: ${SSE_MAX_CONNECTIONS_PER_USER:-5}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - bitpix_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [bitpix_internal]
+
+  redis:
+    image: redis:8.2-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - bitpix_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [bitpix_internal]
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["npm", "--workspace", "@bitpix/api", "run", "start"]
+    environment: *app-environment
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-3333}:3333"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3333/health/live"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+    networks: [bitpix_internal]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["npm", "--workspace", "@bitpix/worker", "run", "start"]
+    environment: *app-environment
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [bitpix_internal]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["npm", "--workspace", "@bitpix/web", "run", "start"]
+    environment: *app-environment
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-3000}:3000"
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/login"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+    networks: [bitpix_internal]
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npm", "run", "db:deploy"]
+    environment: *app-environment
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: [tools]
+    networks: [bitpix_internal]
+
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["npm", "run", "db:seed"]
+    environment:
+      <<: *app-environment
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@bitpix.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+    depends_on:
+      postgres: { condition: service_healthy }
+    profiles: [tools]
+    networks: [bitpix_internal]
+
+networks:
+  bitpix_internal:
+    driver: bridge
+
+volumes:
+  bitpix_postgres_data:
+  bitpix_redis_data:
