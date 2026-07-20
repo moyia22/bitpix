@@ -111,6 +111,7 @@ export const createUserSchema = z.object({
   password: z.string().min(12).max(128),
   branchPublicId: z.uuid().nullable().optional(),
   roleKeys: z.array(z.string().trim().min(1).max(50)).min(1),
+  requirePasswordChange: z.boolean().optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -121,6 +122,25 @@ export const updateUserSchema = z.object({
   status: z.enum(["ACTIVE", "INACTIVE", "BLOCKED"]).optional(),
   mustResetPassword: z.boolean().optional(),
 }).refine((body) => Object.keys(body).length > 0, "Informe ao menos um campo");
+
+export const setPasswordSchema = z.object({
+  password: z.string().min(12).max(128),
+  requirePasswordChange: z.boolean().optional(),
+  mfaCode: z.string().trim().regex(/^\d{6}$/),
+});
+
+export const deleteUserSchema = z.object({
+  mfaCode: z.string().trim().regex(/^\d{6}$/),
+});
+
+export const resetMfaSchema = z.object({
+  mfaCode: z.string().trim().regex(/^\d{6}$/),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(8).max(128),
+  newPassword: z.string().min(12).max(128),
+});
 
 export const roleUpsertSchema = z.object({
   key: z.string().trim().min(2).max(50).regex(/^[A-Za-z0-9_-]+$/).transform((value) => value.toUpperCase()),
@@ -377,6 +397,8 @@ export interface SessionPrincipal {
   roles: string[];
   permissions: PermissionKey[];
   sessionExpiresAt: string;
+  mfaEnrollmentPending: boolean;
+  mustResetPassword: boolean;
 }
 
 export interface ApiErrorBody {
