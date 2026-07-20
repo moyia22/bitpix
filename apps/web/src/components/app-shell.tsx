@@ -77,7 +77,8 @@ function NavigationGroup({
               key={item.href}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
-              className={`group flex min-h-11 items-center gap-3 rounded-xl px-3 text-[0.94rem] font-semibold transition-colors ${active ? "bg-[var(--primary-soft)] text-[var(--primary-strong)]" : "text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"}`}
+              data-active={active}
+              className={`nav-link group flex min-h-11 items-center gap-3 rounded-xl px-3 text-[0.94rem] font-semibold transition-colors ${active ? "text-[var(--primary-strong)]" : "text-[var(--ink-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]"}`}
             >
               <Icon size={19} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
               {item.label}
