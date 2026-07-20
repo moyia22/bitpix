@@ -79,6 +79,8 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
     roles,
     permissions: permissionList,
     sessionExpiresAt: session.expiresAt.toISOString(),
+    mfaEnrollmentPending: (env.REQUIRE_MFA_FOR_PLATFORM || env.REQUIRE_MFA_FOR_ADMINS) && requiresMfa(session.user, permissionList) && !session.user.mfaEnabled,
+    mustResetPassword: session.user.mustResetPassword,
   };
 
   request.auth = {

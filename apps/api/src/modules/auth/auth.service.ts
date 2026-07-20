@@ -6,6 +6,7 @@ import type { FastifyRequest } from "fastify";
 import { env } from "../../config/env.js";
 import { AppError, unauthorized } from "../../lib/errors.js";
 import { writeAudit } from "../../lib/audit.js";
+import { requiresMfa } from "./auth.guard.js";
 import { verifyMfaForLogin } from "./mfa.service.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -93,9 +94,11 @@ export async function login(
     throw new AppError(403, "ACCOUNT_DISABLED", "A conta ou empresa está suspensa.");
   }
 
-  if (env.REQUIRE_MFA_FOR_PLATFORM && user.isPlatformAdmin && !user.mfaEnabled) {
-    throw new AppError(403, "MFA_ENROLLMENT_REQUIRED", "O acesso administrativo exige MFA configurado.");
-  }
+  const permissionKeysForUser = user.roles.flatMap(({ role }) => role.permissions.map(({ permission }) => permission.key));
+  const mustEnrollMfa = (env.REQUIRE_MFA_FOR_PLATFORM || env.REQUIRE_MFA_FOR_ADMINS)
+    && requiresMfa(user, permissionKeysForUser)
+    && !user.mfaEnabled;
+
   if (user.mfaEnabled) {
     if (!mfaCode && !recoveryCode) throw new AppError(428, "MFA_REQUIRED", "Informe o código do autenticador.");
     if (!await verifyMfaForLogin(user, mfaCode, recoveryCode)) {
@@ -145,6 +148,8 @@ export async function login(
     roles,
     permissions,
     sessionExpiresAt: session.expiresAt.toISOString(),
+    mfaEnrollmentPending: mustEnrollMfa,
+    mustResetPassword: user.mustResetPassword,
   };
 
   await writeAudit({
