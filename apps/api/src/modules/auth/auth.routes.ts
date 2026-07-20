@@ -1,8 +1,10 @@
-import { forgotPasswordSchema, loginSchema, mfaCodeSchema, mfaDisableSchema, passwordConfirmationSchema, resetPasswordSchema } from "@bitpix/contracts";
+import { changePasswordSchema, forgotPasswordSchema, loginSchema, mfaCodeSchema, mfaDisableSchema, passwordConfirmationSchema, resetPasswordSchema } from "@bitpix/contracts";
 import { prisma } from "@bitpix/database";
+import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
 import { env } from "../../config/env.js";
 import { writeAudit } from "../../lib/audit.js";
+import { AppError } from "../../lib/errors.js";
 import { authenticate } from "./auth.guard.js";
 import { login } from "./auth.service.js";
 import { beginMfaSetup, confirmMfaSetup, disableMfa } from "./mfa.service.js";
@@ -36,6 +38,20 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     await resetPassword(request, body.token, body.password);
     reply.clearCookie(env.SESSION_COOKIE_NAME, { path: "/" });
     return reply.send({ data: { message: "Senha redefinida. Entre novamente." } });
+  });
+
+  app.post("/auth/password/change", { preHandler: authenticate, config: { rateLimit: { max: 5, timeWindow: "15 minutes" } } }, async (request, reply) => {
+    const body = changePasswordSchema.parse(request.body);
+    const auth = request.auth!;
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: auth.userId } });
+    if (!await argon2.verify(user.passwordHash, body.currentPassword)) throw new AppError(401, "PASSWORD_INVALID", "Senha atual inválida.");
+    const passwordHash = await argon2.hash(body.newPassword, { type: argon2.argon2id });
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id: user.id }, data: { passwordHash, mustResetPassword: false } });
+      await tx.userSession.updateMany({ where: { userId: user.id, id: { not: auth.sessionId }, revokedAt: null }, data: { revokedAt: new Date() } });
+      await writeAudit({ request, client: tx, action: "auth.password.changed", entity: "User", entityPublicId: user.publicId });
+    });
+    return reply.status(204).send();
   });
 
   app.post("/auth/mfa/setup", { preHandler: authenticate }, async (request) => {

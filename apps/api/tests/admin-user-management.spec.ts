@@ -50,3 +50,22 @@ describe("matrícula de 2FA no login do admin", () => {
     expect(me.statusCode).toBe(200);
   });
 });
+
+describe("troca de senha própria", () => {
+  let app: Awaited<ReturnType<typeof buildApp>>;
+  beforeAll(async () => { app = await buildApp(); await app.ready(); });
+  afterAll(async () => { await app.close(); });
+
+  it("troca a senha com a senha atual correta", async () => {
+    const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "operador@bitpix.local", password: adminPassword } });
+    const cookie = String(login.headers["set-cookie"]).split(";")[0];
+    const changed = await app.inject({ method: "POST", url: "/api/v1/auth/password/change", headers: { cookie }, payload: { currentPassword: adminPassword, newPassword: "NovaSenhaForte123" } });
+    expect(changed.statusCode).toBe(204);
+
+    // restaura a senha do seed para não quebrar outros testes
+    const relogin = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "operador@bitpix.local", password: "NovaSenhaForte123" } });
+    const cookie2 = String(relogin.headers["set-cookie"]).split(";")[0];
+    const restored = await app.inject({ method: "POST", url: "/api/v1/auth/password/change", headers: { cookie: cookie2 }, payload: { currentPassword: "NovaSenhaForte123", newPassword: adminPassword! } });
+    expect(restored.statusCode).toBe(204);
+  });
+});
