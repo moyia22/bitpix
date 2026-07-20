@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApiErrorBody, CashSessionDto, PixChargeDto } from "@bitpix/contracts";
-import { ArrowLeft, Check, CircleCheckBig, Clipboard, CornerDownLeft, ExternalLink, Printer, Radio, RotateCcw, ScanLine, ShieldAlert, X } from "lucide-react";
+import { ArrowLeft, Calculator, Check, CircleCheckBig, Clipboard, CornerDownLeft, Delete, ExternalLink, Printer, Radio, RotateCcw, ScanLine, ShieldAlert, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -47,6 +47,7 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
   const [copied, setCopied] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [paperWidth, setPaperWidth] = useState<"MM58" | "MM80">("MM80");
+  const [keypadOpen, setKeypadOpen] = useState(true);
   const [clock, setClock] = useState(0);
   const [connectionState, setConnectionState] = useState<"idle" | "live" | "polling">("idle");
   const [paymentReceipt, setPaymentReceipt] = useState<Record<string, string> | null>(null);
@@ -67,6 +68,9 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
   const updateAmount = (rawValue: string) => setAmountInCents(Number(rawValue.replace(/\D/g, "").slice(0, 9) || 0));
   const addAmount = (cents: number) => { setAmountInCents((previous) => Math.min(previous + cents, 99_999_999)); amountRef.current?.focus(); };
   const clearAmount = () => { setAmountInCents(0); amountRef.current?.focus(); };
+  const pushDigit = (digit: number) => { setAmountInCents((previous) => Math.min(previous * 10 + digit, 99_999_999)); amountRef.current?.focus(); };
+  const pushDoubleZero = () => { setAmountInCents((previous) => Math.min(previous * 100, 99_999_999)); amountRef.current?.focus(); };
+  const backspaceAmount = () => { setAmountInCents((previous) => Math.floor(previous / 10)); amountRef.current?.focus(); };
   const quickAmounts = [500, 1000, 2000, 5000, 10000];
 
   const loadCharge = useCallback(async (publicId: string) => {
@@ -241,9 +245,12 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
       <div>
         <div className="mb-2 flex items-center justify-between gap-3">
           <label className="field-label mb-0" htmlFor="sale-amount">Valor da venda</label>
-          {amountInCents > 0 && (
-            <button type="button" className="amount-clear" onClick={clearAmount}><X size={14} /> Limpar</button>
-          )}
+          <div className="flex items-center gap-3">
+            <button type="button" className="amount-clear" onClick={() => setKeypadOpen((open) => !open)} aria-pressed={keypadOpen}><Calculator size={14} /> Teclado</button>
+            {amountInCents > 0 && (
+              <button type="button" className="amount-clear" onClick={clearAmount}><X size={14} /> Limpar</button>
+            )}
+          </div>
         </div>
         <input
           ref={amountRef}
@@ -264,7 +271,17 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
             </button>
           ))}
         </div>
-        <p className="mt-2 text-sm text-[var(--ink-faint)]">Digite os números — os dois últimos são os centavos. Ex.: <strong className="text-[var(--ink-muted)]">1250</strong> vira <strong className="text-[var(--ink-muted)]">R$ 12,50</strong>.</p>
+        {keypadOpen && (
+          <div className="keypad" role="group" aria-label="Teclado numérico">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((digit) => (
+              <button type="button" key={digit} className="keypad-key" onClick={() => pushDigit(digit)}>{digit}</button>
+            ))}
+            <button type="button" className="keypad-key keypad-key--muted" onClick={pushDoubleZero}>00</button>
+            <button type="button" className="keypad-key" onClick={() => pushDigit(0)}>0</button>
+            <button type="button" className="keypad-key keypad-key--muted" onClick={backspaceAmount} aria-label="Apagar último dígito"><Delete size={20} /></button>
+          </div>
+        )}
+        <p className="mt-2 text-sm text-[var(--ink-faint)]">Toque nos números ou use os atalhos. Os dois últimos dígitos são os centavos — <strong className="text-[var(--ink-muted)]">1250</strong> vira <strong className="text-[var(--ink-muted)]">R$ 12,50</strong>.</p>
       </div>
       {!readiness.configured && <div className="cash-notice cash-notice-error"><span><strong>Mercado Pago não está pronto.</strong><br />Configure e teste a integração antes de cobrar.</span><Link href="/configuracoes/integracoes/mercado-pago" className="cash-secondary-button"><ArrowLeft size={16} /> Configurar</Link></div>}
       {error && <div role="alert" className="cash-notice cash-notice-error">{error}</div>}
