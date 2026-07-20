@@ -1279,3 +1279,42 @@ main#conteudo-principal { animation: page-enter 0.5s var(--ease-out) both; }
 .dev-badge { animation: soft-float 4s ease-in-out infinite; }
 .pix-qr-shell { transition: transform 0.3s var(--ease-out), box-shadow 0.3s ease; }
 .pix-qr-shell:hover { transform: scale(1.015); box-shadow: 0 20px 45px -20px color-mix(in srgb, var(--primary) 50%, transparent); }
+
+/* --- Campo de valor da venda (mais fácil, à prova de erro) --- */
+.amount-input { caret-color: var(--primary); transition: border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease; }
+.amount-input[data-empty="true"] { color: var(--ink-faint); }
+.amount-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.amount-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 16px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: transform 0.14s var(--ease-out), border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease, box-shadow 0.2s ease;
+}
+.amount-chip:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--primary) 60%, transparent);
+}
+.amount-chip:active { transform: translateY(0) scale(0.96); }
+.amount-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+  font-weight: 700;
+  transition: color 0.18s ease;
+}
+.amount-clear:hover { color: var(--danger); }

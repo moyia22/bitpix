@@ -64,7 +64,10 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
   const handleCodeKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") { event.preventDefault(); amountRef.current?.focus(); }
   };
-  const updateAmount = (rawValue: string) => setAmountInCents(Number(rawValue.replace(/\D/g, "").slice(0, 11) || 0));
+  const updateAmount = (rawValue: string) => setAmountInCents(Number(rawValue.replace(/\D/g, "").slice(0, 9) || 0));
+  const addAmount = (cents: number) => { setAmountInCents((previous) => Math.min(previous + cents, 99_999_999)); amountRef.current?.focus(); };
+  const clearAmount = () => { setAmountInCents(0); amountRef.current?.focus(); };
+  const quickAmounts = [500, 1000, 2000, 5000, 10000];
 
   const loadCharge = useCallback(async (publicId: string) => {
     const response = await fetch(`${apiUrl}/api/v1/pix/charges/${publicId}`, { credentials: "include", headers: { "x-bitpix-polling": "true" } });
@@ -235,7 +238,34 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
         <input ref={codeRef} className="field-input text-lg font-semibold uppercase tracking-[0.02em]" id="sale-code" value={code} onChange={(event) => setCode(event.target.value.replace(/\s+/g, " ").slice(0, 64))} onKeyDown={handleCodeKeyDown} autoComplete="off" maxLength={64} placeholder="Ex.: PED-1048" required />
         <p className="mt-2 text-sm text-[var(--ink-faint)]">Pedido, comanda ou código do seu sistema.</p>
       </div>
-      <div><label className="field-label" htmlFor="sale-amount">Valor da venda</label><input ref={amountRef} className="field-input h-16 text-right font-[var(--font-display)] text-3xl font-semibold tracking-[-0.025em]" id="sale-amount" inputMode="numeric" value={moneyFormatter.format(amountInCents / 100)} onChange={(event) => updateAmount(event.target.value)} autoComplete="off" required aria-label="Valor da venda em reais" /></div>
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <label className="field-label mb-0" htmlFor="sale-amount">Valor da venda</label>
+          {amountInCents > 0 && (
+            <button type="button" className="amount-clear" onClick={clearAmount}><X size={14} /> Limpar</button>
+          )}
+        </div>
+        <input
+          ref={amountRef}
+          className="field-input amount-input h-16 text-right font-[var(--font-display)] text-3xl font-semibold tracking-[-0.025em]"
+          id="sale-amount"
+          inputMode="numeric"
+          value={moneyFormatter.format(amountInCents / 100)}
+          onChange={(event) => updateAmount(event.target.value)}
+          data-empty={amountInCents === 0}
+          autoComplete="off"
+          required
+          aria-label="Valor da venda em reais"
+        />
+        <div className="amount-chips" role="group" aria-label="Adicionar valores rápidos">
+          {quickAmounts.map((cents) => (
+            <button type="button" key={cents} className="amount-chip" onClick={() => addAmount(cents)}>
+              + {moneyFormatter.format(cents / 100)}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-sm text-[var(--ink-faint)]">Digite os números — os dois últimos são os centavos. Ex.: <strong className="text-[var(--ink-muted)]">1250</strong> vira <strong className="text-[var(--ink-muted)]">R$ 12,50</strong>.</p>
+      </div>
       {!readiness.configured && <div className="cash-notice cash-notice-error"><span><strong>Mercado Pago não está pronto.</strong><br />Configure e teste a integração antes de cobrar.</span><Link href="/configuracoes/integracoes/mercado-pago" className="cash-secondary-button"><ArrowLeft size={16} /> Configurar</Link></div>}
       {error && <div role="alert" className="cash-notice cash-notice-error">{error}</div>}
       {!currentCash && <div className="rounded-xl border border-[color-mix(in_srgb,var(--warning)_28%,var(--border))] bg-[var(--warning-soft)] px-4 py-3.5 text-sm text-[var(--ink)]"><strong className="block">Abra o caixa antes de gerar uma cobrança.</strong><Link href="/caixa" className="mt-2 inline-flex font-bold text-[var(--warning)]">Abrir caixa →</Link></div>}

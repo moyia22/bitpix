@@ -23,6 +23,7 @@
     "db:migrate": "npm --workspace @bitpix/database run migrate",
     "db:deploy": "npm --workspace @bitpix/database run deploy",
     "db:seed": "npm --workspace @bitpix/database run seed",
+    "db:create-user": "npm --workspace @bitpix/database run create-user",
     "db:studio": "npm --workspace @bitpix/database run studio"
   },
   "devDependencies": {
