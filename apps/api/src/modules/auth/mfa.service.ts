@@ -106,3 +106,10 @@ export async function verifyMfaForLogin(user: {
   });
   return result.count === 1;
 }
+
+export async function assertStepUpMfa(request: FastifyRequest, code?: string): Promise<void> {
+  const user = await authenticatedUser(request);
+  if (!user.mfaEnabled) throw new AppError(403, "MFA_SETUP_REQUIRED", "Ative o 2FA para executar esta ação.");
+  if (!code) throw new AppError(428, "MFA_REQUIRED", "Informe o código do autenticador.");
+  if (!verifyTotp(readSecret(user), code)) throw new AppError(401, "MFA_INVALID", "Código de autenticação inválido.");
+}

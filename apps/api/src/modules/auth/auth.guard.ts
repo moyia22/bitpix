@@ -6,6 +6,16 @@ import { forbidden, unauthorized } from "../../lib/errors.js";
 import { writeAudit } from "../../lib/audit.js";
 import { hashSessionToken } from "./auth.service.js";
 
+const ADMIN_PERMISSION_PREFIXES = ["users.", "roles."] as const;
+
+export function requiresMfa(user: { isPlatformAdmin: boolean }, permissions: Iterable<string>): boolean {
+  if (user.isPlatformAdmin) return true;
+  for (const permission of permissions) {
+    if (ADMIN_PERMISSION_PREFIXES.some((prefix) => permission.startsWith(prefix))) return true;
+  }
+  return false;
+}
+
 export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const token = request.cookies[env.SESSION_COOKIE_NAME];
   if (!token) throw unauthorized();
