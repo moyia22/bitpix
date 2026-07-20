@@ -39,6 +39,7 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().optional(),
   SMTP_FROM: z.string().min(3).default("BitPix <no-reply@localhost>"),
   REQUIRE_MFA_FOR_PLATFORM: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  REQUIRE_MFA_FOR_ADMINS: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(5).max(60).default(15),
   APP_VERSION: z.string().min(1).default("0.1.0"),
   APP_COMMIT_SHA: z.string().min(1).default("development"),
@@ -71,6 +72,7 @@ const envSchema = z.object({
   if (value.STORAGE_DRIVER === "s3" && (!value.S3_BUCKET || !value.S3_ACCESS_KEY || !value.S3_SECRET_KEY)) context.addIssue({ code: "custom", path: ["S3_BUCKET"], message: "bucket e credenciais S3 são obrigatórios" });
   if (value.APP_ENV === "production" && (!value.SMTP_HOST || !value.SMTP_USER || !value.SMTP_PASSWORD)) context.addIssue({ code: "custom", path: ["SMTP_HOST"], message: "SMTP autenticado é obrigatório em produção" });
   if (value.APP_ENV === "production" && !value.REQUIRE_MFA_FOR_PLATFORM) context.addIssue({ code: "custom", path: ["REQUIRE_MFA_FOR_PLATFORM"], message: "MFA do superadmin é obrigatório" });
+  if (value.APP_ENV === "production" && !value.REQUIRE_MFA_FOR_ADMINS) context.addIssue({ code: "custom", path: ["REQUIRE_MFA_FOR_ADMINS"], message: "MFA de administradores é obrigatório" });
   if (value.APP_ENV === "production" && !/redis(s)?:\/\/[^:@/]+:[^@/]+@/.test(value.REDIS_URL)) context.addIssue({ code: "custom", path: ["REDIS_URL"], message: "Redis deve usar autenticação" });
 });
 
