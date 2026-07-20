@@ -47,6 +47,15 @@ Turborepo faz cache das tasks; `build`/`lint`/`typecheck`/`test` dependem de `^b
 - Preferir **expand/contract** (adicionar antes de remover).
 - Evitar operações destrutivas; ver `DEPLOYMENT.md` e `DISASTER_RECOVERY.md`.
 
+## Redis local no Windows (sem Docker)
+Se o Docker Desktop não estiver disponível, use a build `redis-windows` (gitignorada em `.runtime/redis`):
+```bash
+./scripts/dev-redis.sh                          # sobe Redis em 127.0.0.1:6380
+npm --workspace @bitpix/worker run start        # worker (outro terminal)
+npm run dev                                      # web + api
+```
+Com Redis + worker ativos, `GET /health/ready` passa de `503 degraded` para `ready`. O binário não é versionado; baixe de github.com/redis-windows/redis-windows e extraia em `.runtime/redis/` se a pasta não existir.
+
 ## Testes
 - Vitest (`apps/api/tests`) roda contra Postgres real (usa `DATABASE_URL` do `.env`).
 - `fileParallelism: false` para isolamento transacional.
