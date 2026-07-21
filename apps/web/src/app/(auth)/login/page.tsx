@@ -11,7 +11,7 @@ export default function LoginPage() {
         <div
           aria-hidden="true"
           className="pointer-events-none absolute -left-24 -top-28 h-[28rem] w-[28rem] rounded-full opacity-70 blur-3xl"
-          style={{ background: "radial-gradient(circle, rgba(124,107,245,0.55), transparent 70%)", animation: "soft-float 7s ease-in-out infinite" }}
+          style={{ background: "radial-gradient(circle, rgba(20,90,255,0.5), transparent 70%)", animation: "soft-float 7s ease-in-out infinite" }}
         />
         <div
           aria-hidden="true"
@@ -20,10 +20,10 @@ export default function LoginPage() {
         />
         <div className="relative z-10"><BrandMark light /></div>
         <div className="relative z-10 my-auto max-w-lg pb-10" style={{ animation: "reveal-up 0.6s var(--ease-out) both" }}>
-          <p className="mb-5 text-sm font-bold uppercase tracking-[0.16em] text-[#aaa5f7]">Precisão de balcão</p>
+          <p className="mb-5 text-sm font-bold uppercase tracking-[0.16em] text-[#9db8ff]">Precisão de balcão</p>
           <h1 className="font-[var(--font-display)] text-[clamp(2.7rem,5vw,5rem)] font-semibold leading-[0.98] tracking-[-0.05em]">
             Cobrar bem<br />
-            <span style={{ background: "linear-gradient(120deg,#9d8bff,#34d8c2)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>é cobrar simples.</span>
+            <span style={{ background: "linear-gradient(120deg,#4b8bff,#34d8c2)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>é cobrar simples.</span>
           </h1>
           <p className="mt-7 max-w-md text-lg leading-relaxed text-[#b9c1d3]">
             Uma operação limpa, segura e preparada para cada Pix no ritmo da sua loja.

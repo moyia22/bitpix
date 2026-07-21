@@ -6,7 +6,7 @@ import type { FastifyRequest } from "fastify";
 import { env } from "../../config/env.js";
 import { AppError, unauthorized } from "../../lib/errors.js";
 import { writeAudit } from "../../lib/audit.js";
-import { requiresMfa } from "./auth.guard.js";
+import { requiresMfa } from "./mfa-policy.js";
 import { verifyMfaForLogin } from "./mfa.service.js";
 
 const MAX_LOGIN_ATTEMPTS = 5;

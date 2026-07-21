@@ -7,7 +7,7 @@ vi.hoisted(() => {
 import { prisma } from "@bitpix/database";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
-import { requiresMfa } from "../src/modules/auth/auth.guard.js";
+import { requiresMfa } from "../src/modules/auth/mfa-policy.js";
 import { encryptSecret } from "../src/lib/secret-vault.js";
 import { generateTotpSecret, totp } from "../src/modules/auth/totp.js";
 

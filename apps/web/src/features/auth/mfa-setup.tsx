@@ -181,7 +181,7 @@ export function MfaSetup({ initialEnabled }: { initialEnabled: boolean }) {
           </div>
           <p className="integration-help">Não consegue escanear? Informe esta chave manualmente no aplicativo:</p>
           <div className="integration-webhook-url">
-            <code>{setupData.otpauthUri}</code>
+            <code>{setupData.secret}</code>
             <button type="button" onClick={() => void copySecret()} aria-label="Copiar chave secreta">{copied ? <Check size={18} /> : <Clipboard size={18} />}</button>
           </div>
           <form onSubmit={(event) => void confirmSetup(event)}>
