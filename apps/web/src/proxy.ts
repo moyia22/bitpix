@@ -22,7 +22,10 @@ export function proxy(request: NextRequest) {
   if (request.nextUrl.pathname === "/login" && hasSession) {
     return NextResponse.redirect(new URL("/nova-venda", request.url));
   }
-  return NextResponse.next();
+  // Encaminha o caminho atual para os layouts (usado pelos portões pós-login).
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

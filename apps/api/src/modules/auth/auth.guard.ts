@@ -94,7 +94,7 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
   };
 
   const path = request.url.split("?")[0] ?? request.url;
-  const enrollmentAllow = ["/api/v1/auth/mfa/setup", "/api/v1/auth/mfa/confirm", "/api/v1/auth/me", "/api/v1/auth/logout"];
+  const enrollmentAllow = ["/api/v1/auth/mfa/setup", "/api/v1/auth/mfa/confirm", "/api/v1/auth/mfa/status", "/api/v1/auth/me", "/api/v1/auth/logout"];
   const resetAllow = ["/api/v1/auth/password/change", "/api/v1/auth/me", "/api/v1/auth/logout"];
   if (principal.mfaEnrollmentPending && !enrollmentAllow.includes(path)) {
     throw new AppError(403, "MFA_ENROLLMENT_REQUIRED", "Configure o 2FA para continuar.");
