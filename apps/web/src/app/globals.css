@@ -1336,3 +1336,6 @@ main#conteudo-principal { animation: page-enter 0.5s var(--ease-out) both; }
 .keypad-key:hover { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
 .keypad-key:active { transform: scale(0.95); box-shadow: inset 0 3px 8px color-mix(in srgb, var(--primary) 22%, transparent); }
 .keypad-key--muted { color: var(--ink-muted); font-size: 1.15rem; }
+
+/* --- Logo BitPix: variante branca para fundos escuros --- */
+.brand-logo-light img { filter: brightness(0) invert(1); }

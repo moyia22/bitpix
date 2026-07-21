@@ -18,7 +18,7 @@ export default function LoginPage() {
           className="pointer-events-none absolute right-[-6rem] top-1/3 h-80 w-80 rounded-full opacity-55 blur-3xl"
           style={{ background: "radial-gradient(circle, rgba(52,216,194,0.42), transparent 70%)", animation: "soft-float 9s ease-in-out infinite reverse" }}
         />
-        <div className="relative z-10 [&_*]:text-white"><BrandMark /></div>
+        <div className="relative z-10"><BrandMark light /></div>
         <div className="relative z-10 my-auto max-w-lg pb-10" style={{ animation: "reveal-up 0.6s var(--ease-out) both" }}>
           <p className="mb-5 text-sm font-bold uppercase tracking-[0.16em] text-[#aaa5f7]">Precisão de balcão</p>
           <h1 className="font-[var(--font-display)] text-[clamp(2.7rem,5vw,5rem)] font-semibold leading-[0.98] tracking-[-0.05em]">
