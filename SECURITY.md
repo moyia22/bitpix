@@ -35,6 +35,28 @@ Bloqueia o boot se: `PAYMENT_PROVIDER_MODE=mock`; fallback de webhook; APP_URL/w
 - [ ] Session fixation: sessão é recriada no login (confirmar rotação de id).
 - [x] Vazamento de token: segredos nunca logados; verificar em code review de logs.
 
+## Gestão de usuários e 2FA de administradores
+
+Gerenciamento completo de contas pelo painel (`/usuarios`), com 2FA obrigatório para administradores.
+
+**Endpoints (API):**
+- `POST /users` — cria usuário (aceita `requirePasswordChange`, padrão `false`).
+- `PATCH /users/:id` — edita nome, e‑mail, função e filial; ativa/desativa.
+- `POST /users/:id/set-password` — admin redefine a senha (revoga as sessões do alvo). Exige **step‑up 2FA**.
+- `DELETE /users/:id` — **exclui de vez se não houver histórico** (venda/caixa/movimento/auditoria/exportação/reembolso/config); caso contrário **desativa** e revoga sessões. Bloqueia auto‑exclusão. Exige **step‑up 2FA**.
+- `POST /users/:id/reset-mfa` — zera o 2FA de um usuário (força re‑matrícula). Exige **step‑up 2FA**.
+- `POST /users/:id/revoke-sessions` — revoga sessões ativas.
+- `POST /auth/password/change` — troca da própria senha (revoga as demais sessões).
+
+**2FA (TOTP) para administradores** (`REQUIRE_MFA_FOR_ADMINS`, obrigatório em produção):
+- "Administrador" = superadmin **ou** quem possui permissão `users.*`/`roles.*`.
+- No login sem 2FA, a sessão fica **pendente de matrícula** e só acessa a tela de configuração de 2FA (`/configuracoes/seguranca`) até confirmar o TOTP.
+- **Step‑up**: `set-password`, `delete` e `reset-mfa` exigem o código TOTP do próprio administrador na requisição — uma sessão sequestrada não consegue executá‑las sem o autenticador.
+- Portões pós‑login no frontend forçam configurar 2FA (`mfaEnrollmentPending`) ou trocar a senha (`mustResetPassword`) antes de usar o resto.
+- Segredo TOTP cifrado (AES‑256‑GCM); 10 códigos de recuperação em hash SHA‑256.
+
+Toda ação sensível: verificação de permissão + step‑up 2FA + auditoria; senha nunca registrada em log.
+
 ## Práticas
 - Segredos apenas em secret manager / variáveis do host.
 - HSTS somente após validar TLS (bloco comentado no nginx).

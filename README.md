@@ -144,6 +144,10 @@ Documentação: [INSTALLATION](INSTALLATION.md) · [DEVELOPMENT](DEVELOPMENT.md)
 
 > **Pendências que dependem de ambiente externo** (implementação pronta, ação manual necessária): instalar WSL2 + distro Ubuntu e reativar o engine do Docker Desktop (ver `WSL_AND_DOCKER_SETUP.md`); subir Redis + worker reais; credencial de teste do Mercado Pago para homologação; domínio, VPS e certificado TLS para produção.
 
+### Gestão de usuários + 2FA de administradores
+
+Painel `/usuarios` completo (criar com senha, editar nome/e‑mail/função/filial, redefinir senha, redefinir 2FA, ativar/desativar, revogar sessões, excluir) e **2FA (TOTP) obrigatório para administradores** — no login e como *step‑up* nas ações sensíveis. Configuração de 2FA em `/configuracoes/seguranca`. Flag `REQUIRE_MFA_FOR_ADMINS` (obrigatória em produção). Detalhes e endpoints em [SECURITY](SECURITY.md).
+
 ## Limites atuais
 
 - O modo real depende de credencial e conta Mercado Pago válidas; nenhum segredo real é incluído no projeto.
