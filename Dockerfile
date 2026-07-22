@@ -4,7 +4,7 @@ RUN apk add --no-cache libc6-compat openssl
 
 WORKDIR /app
 
-ARG NEXT_PUBLIC_API_URL=https://bitpix.nextfy.pro/api
+ARG NEXT_PUBLIC_API_URL=https://bitpix.nextfy.pro
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 ENV DATABASE_URL=postgresql://generate:generate@localhost:5432/generate
@@ -18,6 +18,7 @@ COPY packages/database/package.json packages/database/package.json
 RUN npm ci
 
 COPY . .
+
 RUN npm run db:generate && npm run build
 
 FROM node:22.16-alpine AS runtime
