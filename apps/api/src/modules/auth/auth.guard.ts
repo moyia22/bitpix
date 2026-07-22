@@ -91,9 +91,12 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
   const enrollmentAllow = ["/api/v1/auth/mfa/setup", "/api/v1/auth/mfa/confirm", "/api/v1/auth/mfa/status", "/api/v1/auth/me", "/api/v1/auth/logout"];
   const resetAllow = ["/api/v1/auth/password/change", "/api/v1/auth/me", "/api/v1/auth/logout"];
   if (principal.mfaEnrollmentPending && !enrollmentAllow.includes(path)) {
+    // Diz EXATAMENTE por que a rota levou 403: 2FA obrigatório ainda não configurado.
+    request.log.warn({ check: "MFA_ENROLLMENT_REQUIRED", path, userId: session.userId, companyId: session.companyId, mfaEnabled: session.user.mfaEnabled }, "[AUTH] 403 — enrollment de 2FA pendente bloqueia esta rota");
     throw new AppError(403, "MFA_ENROLLMENT_REQUIRED", "Configure o 2FA para continuar.");
   }
   if (principal.mustResetPassword && !resetAllow.includes(path)) {
+    request.log.warn({ check: "PASSWORD_CHANGE_REQUIRED", path, userId: session.userId, companyId: session.companyId }, "[AUTH] 403 — troca de senha obrigatória bloqueia esta rota");
     throw new AppError(403, "PASSWORD_CHANGE_REQUIRED", "Redefina sua senha para continuar.");
   }
 
@@ -106,6 +109,8 @@ export function requirePermission(permission: PermissionKey) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     await authenticate(request, reply);
     if (!request.auth?.permissions.has(permission)) {
+      // Diz EXATAMENTE qual permissão faltou (403 de autorização, não de gate 2FA/senha).
+      request.log.warn({ check: "PERMISSION_MISSING", requiredPermission: permission, userId: request.auth?.userId, companyId: request.auth?.companyId, route: request.routeOptions.url }, "[AUTH] 403 — permissão ausente para esta rota");
       await writeAudit({
         request,
         action: "authorization.denied",

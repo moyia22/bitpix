@@ -57,10 +57,16 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/pix/charges", { preHandler: requirePermission("pix.charge.create") }, async (request) => {
+    // Prova de que a rota FOI atingida (se este log não aparece, a requisição nem chegou:
+    // ver os 403 de gate/permissão no auth.guard, que barram antes deste handler).
+    request.log.info({ userId: request.auth?.userId, companyId: request.auth?.companyId, branchId: request.auth?.branchId }, "[PIX] POST /pix/charges — rota atingida");
     const body = pixChargeCreateSchema.parse(request.body);
     const auth = request.auth!;
     await enforceCompanyLimit(auth.companyId, "monthlyCharges");
-    if (!auth.branchId) throw new AppError(409, "BRANCH_REQUIRED", "Vincule o usuário a uma filial antes de cobrar.");
+    if (!auth.branchId) {
+      request.log.warn({ userId: auth.userId }, "[PIX] bloqueado: usuário sem filial vinculada");
+      throw new AppError(409, "BRANCH_REQUIRED", "Vincule o usuário a uma filial antes de cobrar.");
+    }
 
     const [cashSession, configuration, existing] = await Promise.all([
       prisma.cashSession.findFirst({
@@ -78,14 +84,17 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
       }),
     ]);
     if (!cashSession) {
+      request.log.warn({ saleCode: body.code, userId: auth.userId }, "[PIX] bloqueado: nenhum caixa aberto para o operador");
       await writeAudit({ request, action: "pix.charge.denied.cash_closed", entity: "PixCharge", outcome: AuditOutcome.FAILURE, metadata: { saleCode: body.code } });
       throw new AppError(409, "OPEN_CASH_SESSION_REQUIRED", "Abra o caixa antes de gerar uma cobrança Pix.");
     }
     if (!configuration?.credentialCiphertext || !configuredStatuses.includes(configuration.status)) {
+      request.log.warn({ saleCode: body.code, providerStatus: configuration?.status ?? "NOT_CONFIGURED" }, "[PIX] bloqueado: Mercado Pago não configurado/testado");
       await writeAudit({ request, action: "pix.charge.denied.provider_not_ready", entity: "PixCharge", outcome: AuditOutcome.FAILURE, metadata: { saleCode: body.code, providerStatus: configuration?.status ?? "NOT_CONFIGURED" } });
       throw new AppError(409, "PROVIDER_NOT_READY", "Configure e teste a integração com o Mercado Pago antes de cobrar.");
     }
     if (existing) {
+      request.log.warn({ saleCode: body.code, existingStatus: existing.status }, "[PIX] bloqueado: cobrança duplicada para o mesmo código");
       await writeAudit({ request, action: "pix.charge.duplicate_blocked", entity: "PixCharge", entityPublicId: existing.publicId, outcome: AuditOutcome.FAILURE, metadata: { saleCode: body.code, existingStatus: existing.status } });
       throw new AppError(409, "PIX_CHARGE_ALREADY_EXISTS", "Este código já possui uma cobrança Pix.", { existingChargePublicId: existing.publicId, status: existing.status });
     }
