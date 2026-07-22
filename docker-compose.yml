@@ -7,7 +7,8 @@ x-app-environment: &app-environment
   API_URL: http://api:3333
   NEXT_PUBLIC_API_URL: http://localhost:3333
   API_PORT: 3333
-  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+  DATABASE_URL: ${DATABASE_URL}
+  DIRECT_URL: ${DIRECT_URL}
   REDIS_URL: redis://redis:6379
   SESSION_COOKIE_NAME: bitpix_session
   SESSION_TTL_HOURS: 8
@@ -21,6 +22,14 @@ x-app-environment: &app-environment
   WEBHOOK_SIGNATURE_TOLERANCE_SECONDS: ${WEBHOOK_SIGNATURE_TOLERANCE_SECONDS:-300}
   WEBHOOK_MAX_ATTEMPTS: ${WEBHOOK_MAX_ATTEMPTS:-8}
   SSE_MAX_CONNECTIONS_PER_USER: ${SSE_MAX_CONNECTIONS_PER_USER:-5}
+  STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_BUCKET: ${S3_BUCKET:-}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+  S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+  S3_SERVER_SIDE_ENCRYPTION: ${S3_SERVER_SIDE_ENCRYPTION:-none}
 
 services:
   postgres:
@@ -66,7 +75,6 @@ services:
     ports:
       - "127.0.0.1:${API_HOST_PORT:-3333}:3333"
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3333/health/live"]
@@ -83,7 +91,6 @@ services:
     command: ["npm", "--workspace", "@bitpix/worker", "run", "start"]
     environment: *app-environment
     depends_on:
-      postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     networks: [bitpix_internal]
 
@@ -111,8 +118,6 @@ services:
       dockerfile: Dockerfile
     command: ["npm", "run", "db:deploy"]
     environment: *app-environment
-    depends_on:
-      postgres: { condition: service_healthy }
     profiles: [tools]
     networks: [bitpix_internal]
 
@@ -125,8 +130,6 @@ services:
       <<: *app-environment
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@bitpix.local}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
-    depends_on:
-      postgres: { condition: service_healthy }
     profiles: [tools]
     networks: [bitpix_internal]
 
