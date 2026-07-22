@@ -1,9 +1,13 @@
 FROM node:22.16-alpine AS builder
+
 RUN apk add --no-cache libc6-compat openssl
+
 WORKDIR /app
 
+ARG NEXT_PUBLIC_API_URL=https://bitpix.nextfy.pro/api
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
 ENV DATABASE_URL=postgresql://generate:generate@localhost:5432/generate
-ENV NEXT_PUBLIC_API_URL=http://localhost:3333
 
 COPY package.json package-lock.json* turbo.json tsconfig.base.json eslint.config.mjs ./
 COPY apps/api/package.json apps/api/package.json
