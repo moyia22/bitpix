@@ -153,8 +153,15 @@ export const saleDraftSchema = z.object({
     .string()
     .trim()
     .min(1, "Informe o código da venda")
-    .max(64)
-    .regex(/^[\p{L}\p{N}/_.-]+$/u, "Use letras, números, hífen, barra ou ponto"),
+    // Aceita espaços de forma transparente: remove os das extremidades (trim) e
+    // troca os internos por hífen ("TESTE 1" → "TESTE-1"), colapsando repetições.
+    .transform((value) => value.replace(/\s+/g, "-").replace(/-{2,}/g, "-"))
+    .pipe(
+      z
+        .string()
+        .max(64)
+        .regex(/^[\p{L}\p{N}/_.-]+$/u, "Use letras, números, hífen, barra ou ponto"),
+    ),
   amountInCents: z.number().int().positive("Informe um valor maior que zero"),
 });
 

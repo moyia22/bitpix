@@ -5,6 +5,7 @@ import { ArrowLeft, Calculator, Check, CircleCheckBig, Clipboard, CornerDownLeft
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { PrintReceipt } from "@/components/print-receipt";
 
 const moneyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
@@ -191,7 +192,7 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
           <div className="pix-reference"><span>Código da venda</span><strong>{charge.saleCode}</strong><span>Confirmado em</span><strong>{charge.paidAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(charge.paidAt)) : "Agora"}</strong><span>Transação</span><strong>{charge.providerPaymentIdMasked ?? "Protegida"}</strong></div>
           <div className="pix-action-grid"><button type="button" className="cash-secondary-button" onClick={() => setPrintOpen(true)}><Printer size={17} /> Imprimir comprovante</button><button type="button" className="primary-button" onClick={newSale}><RotateCcw size={17} /> Nova venda</button></div>
           {printOpen && <div className="pix-print-panel" role="dialog" aria-modal="true" aria-label="Imprimir comprovante"><div><strong>Largura do papel</strong><button type="button" onClick={() => setPrintOpen(false)} aria-label="Fechar"><X size={18} /></button></div><div className="pix-paper-options"><button type="button" data-active={paperWidth === "MM58"} onClick={() => setPaperWidth("MM58")}>58 mm</button><button type="button" data-active={paperWidth === "MM80"} onClick={() => setPaperWidth("MM80")}>80 mm</button></div><button className="primary-button w-full" type="button" onClick={() => void printPaymentReceipt()}><Printer size={18} /> Imprimir comprovante</button></div>}
-          <article className="pix-print-receipt" aria-hidden="true"><h1>{paymentReceipt?.storeName ?? "BitPix"}</h1><p>{paymentReceipt?.title ?? "Pagamento confirmado"}</p><strong>{moneyFormatter.format(Number(paymentReceipt?.amount ?? charge.receivedAmount ?? charge.amount))}</strong><p>Venda {paymentReceipt?.saleCode ?? charge.saleCode}</p><p>Transação {paymentReceipt?.providerPaymentIdMasked ?? charge.providerPaymentIdMasked}</p><p>Operador: {paymentReceipt?.operator ?? "Registrado no sistema"}</p><p>Caixa: {paymentReceipt?.cashRegister ?? charge.cashRegister.name}</p><small>{paymentReceipt?.paidAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(paymentReceipt.paidAt)) : ""}</small><b>{paymentReceipt?.paymentMethod ?? "Pix"} · {paymentReceipt?.disclaimer ?? "Documento não fiscal"}</b></article>
+          <PrintReceipt><h1>{paymentReceipt?.storeName ?? "BitPix"}</h1><p>{paymentReceipt?.title ?? "Pagamento confirmado"}</p><strong>{moneyFormatter.format(Number(paymentReceipt?.amount ?? charge.receivedAmount ?? charge.amount))}</strong><p>Venda {paymentReceipt?.saleCode ?? charge.saleCode}</p><p>Transação {paymentReceipt?.providerPaymentIdMasked ?? charge.providerPaymentIdMasked}</p><p>Operador: {paymentReceipt?.operator ?? "Registrado no sistema"}</p><p>Caixa: {paymentReceipt?.cashRegister ?? charge.cashRegister.name}</p><small>{paymentReceipt?.paidAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(paymentReceipt.paidAt)) : ""}</small><b>{paymentReceipt?.paymentMethod ?? "Pix"} · {paymentReceipt?.disclaimer ?? "Documento não fiscal"}</b></PrintReceipt>
         </div>
       );
     }
@@ -224,12 +225,12 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
 
         {printOpen && <div className="pix-print-panel" role="dialog" aria-modal="true" aria-label="Imprimir cobrança"><div><strong>Largura do papel</strong><button type="button" onClick={() => setPrintOpen(false)} aria-label="Fechar"><X size={18} /></button></div><div className="pix-paper-options"><button type="button" data-active={paperWidth === "MM58"} onClick={() => setPaperWidth("MM58")}>58 mm</button><button type="button" data-active={paperWidth === "MM80"} onClick={() => setPaperWidth("MM80")}>80 mm</button></div><button className="primary-button w-full" type="button" onClick={() => void printCharge()}><Printer size={18} /> Imprimir cobrança</button></div>}
 
-        <article className="pix-print-receipt" aria-hidden="true">
+        <PrintReceipt>
           <h1>BitPix</h1><p>Cobrança Pix</p>
           {charge.qrCodeBase64 && <Image src={`data:image/png;base64,${charge.qrCodeBase64}`} width={420} height={420} unoptimized alt="" />}
           <strong>{moneyFormatter.format(Number(charge.amount))}</strong><p>{charge.saleCode}</p><small>Gerado em {new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(charge.createdAt))}</small>
           {charge.providerMode === "mock" && <b>SEM VALOR — AMBIENTE SIMULADO</b>}
-        </article>
+        </PrintReceipt>
       </div>
     );
   }

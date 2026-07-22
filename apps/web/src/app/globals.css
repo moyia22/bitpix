@@ -1106,16 +1106,32 @@ a {
 @media (max-width: 720px) { .history-filters, .history-detail-grid { grid-template-columns: 1fr; } .history-filters .primary-button { width: 100%; } .history-modal { padding: 10px; } }
 
 @media print {
-  body * { visibility: hidden !important; }
-  .pix-print-receipt, .pix-print-receipt * { visibility: visible !important; }
-  .pix-print-receipt { position: absolute; inset: 0 auto auto 0; display: flex; width: 80mm; flex-direction: column; align-items: center; color: #000; padding: 4mm; font-family: Arial, sans-serif; text-align: center; }
-  html[data-receipt-width="MM58"] .pix-print-receipt { width: 58mm; }
-  .pix-print-receipt h1 { margin: 0; font-size: 20pt; }
-  .pix-print-receipt p { margin: 2mm 0; }
-  .pix-print-receipt img { width: 100%; height: auto; }
-  .pix-print-receipt > strong { font-size: 18pt; }
-  .pix-print-receipt b { margin-top: 4mm; border: 2px solid #000; padding: 2mm; }
-  @page { margin: 0; }
+  /* Caixa de página = largura do rolo térmico (altura contínua). Sem isso, o
+     navegador assume A4/Carta e o cupom de 80 mm sai no canto de uma folha
+     inteira — origem de papel em branco e cortes errados. */
+  @page { size: 80mm auto; margin: 0; }
+  @page receipt58 { size: 58mm auto; margin: 0; }
+  html, body { width: auto !important; height: auto !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  /* O cupom é portado para filho direto de <body>; escondemos TODO o resto do
+     app para não gerar páginas em branco nem cortes no lugar errado. */
+  body > *:not(.pix-print-receipt) { display: none !important; }
+  .pix-print-receipt {
+    display: flex !important; position: static; width: 80mm; box-sizing: border-box; margin: 0;
+    flex-direction: column; align-items: center; color: #000; padding: 4mm 3mm;
+    font-family: Arial, "Helvetica Neue", sans-serif; text-align: center; line-height: 1.35;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  html[data-receipt-width="MM58"] .pix-print-receipt { width: 58mm; padding: 3mm 2mm; page: receipt58; }
+  .pix-print-receipt h1 { margin: 0 0 1mm; font-size: 17pt; font-weight: 800; letter-spacing: .02em; }
+  .pix-print-receipt p { margin: 1.5mm 0; font-size: 10pt; }
+  /* QR com tamanho fixo legível e sem quebra de página no meio do código. */
+  .pix-print-receipt img { width: 52mm; max-width: 100%; height: auto; margin: 2mm auto; break-inside: avoid; page-break-inside: avoid; }
+  html[data-receipt-width="MM58"] .pix-print-receipt img { width: 44mm; }
+  .pix-print-receipt > strong { font-size: 20pt; font-weight: 800; margin: 1mm 0; }
+  .pix-print-receipt small { font-size: 8.5pt; }
+  .pix-print-receipt b { margin-top: 3mm; border: 1.5px solid #000; padding: 1.5mm 2mm; font-size: 9pt; }
+  /* Evita páginas em branco extras que alguns drivers térmicos ejetam. */
+  .pix-print-receipt { break-after: avoid; page-break-after: avoid; }
 }
 
 @media (prefers-reduced-motion: reduce) {

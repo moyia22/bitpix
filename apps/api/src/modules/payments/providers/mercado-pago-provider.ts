@@ -3,15 +3,68 @@ import { env } from "../../../config/env.js";
 import { mapProviderStatus } from "./status-mapper.js";
 import { ProviderError, type CreatePixChargeInput, type PaymentProvider, type ProviderPaymentSnapshot, type ProviderPixCharge } from "./payment-provider.js";
 
+// Extrai o motivo legível do erro do Mercado Pago. O SDK lança o corpo JSON de
+// erro cru (Orders → { errors: [...] }, Payments → { message, cause: [...] }),
+// então tentamos todas as formas conhecidas sem vazar dados sensíveis.
+function extractProviderDetail(value: {
+  message?: string; error?: string;
+  cause?: Array<{ code?: string | number; description?: string }> | unknown;
+  errors?: Array<{ code?: string; message?: string }> | unknown;
+}): string | undefined {
+  const parts: string[] = [];
+  if (Array.isArray(value.errors)) {
+    for (const item of value.errors) parts.push([item?.code, item?.message].filter(Boolean).join(": "));
+  }
+  if (Array.isArray(value.cause)) {
+    for (const item of value.cause) parts.push([item?.code, item?.description].filter(Boolean).join(": "));
+  }
+  const joined = parts.filter(Boolean).join(" | ");
+  if (joined) return joined.slice(0, 400);
+  if (typeof value.message === "string" && value.message) return value.message.slice(0, 400);
+  if (typeof value.error === "string" && value.error) return value.error.slice(0, 400);
+  return undefined;
+}
+
 function providerError(error: unknown): ProviderError {
   if (error instanceof ProviderError) return error;
-  const value = error as { status?: number; statusCode?: number; cause?: Array<{ code?: string }>; message?: string; name?: string };
-  const status = value.status ?? value.statusCode;
-  if (status === 401) return new ProviderError("INVALID_CREDENTIAL", "Access Token recusado pelo Mercado Pago.");
-  if (status === 403) return new ProviderError("PERMISSION_DENIED", "A credencial não possui permissão para esta operação.");
-  if (value.name === "AbortError" || /timeout/i.test(value.message ?? "")) return new ProviderError("TIMEOUT", "O Mercado Pago não respondeu dentro do tempo limite.", true);
-  if (status && status >= 400 && status < 500) return new ProviderError("REJECTED", "O Mercado Pago recusou a solicitação.");
-  return new ProviderError("UNAVAILABLE", "O Mercado Pago está temporariamente indisponível.", true);
+  const value = (error ?? {}) as {
+    status?: number | string; statusCode?: number; name?: string; message?: string; error?: string;
+    api_response?: { status?: number };
+    cause?: Array<{ code?: string | number; description?: string }>;
+    errors?: Array<{ code?: string; message?: string }>;
+  };
+
+  // Timeout / abort da nossa camada → transitório (retentável).
+  if (value.name === "AbortError" || /timeout|aborted|abort/i.test(value.message ?? "")) {
+    return new ProviderError("TIMEOUT", "O Mercado Pago não respondeu dentro do tempo limite.", true, value.message);
+  }
+
+  const httpStatus =
+    typeof value.status === "number" ? value.status
+    : typeof value.statusCode === "number" ? value.statusCode
+    : typeof value.api_response?.status === "number" ? value.api_response.status
+    : undefined;
+  const detail = extractProviderDetail(value);
+  const hasErrorBody = Array.isArray(value.errors) || Array.isArray(value.cause) || typeof value.error === "string";
+
+  if (httpStatus === 401) return new ProviderError("INVALID_CREDENTIAL", "Access Token recusado pelo Mercado Pago.", false, detail);
+  if (httpStatus === 403) return new ProviderError("PERMISSION_DENIED", "A credencial não possui permissão para esta operação.", false, detail);
+  if (httpStatus === 429) return new ProviderError("UNAVAILABLE", "Limite de requisições do Mercado Pago atingido. Tente novamente.", true, detail);
+  if (typeof httpStatus === "number" && httpStatus >= 500) {
+    return new ProviderError("UNAVAILABLE", "O Mercado Pago está temporariamente indisponível.", true, detail);
+  }
+  if (typeof httpStatus === "number" && httpStatus >= 400) {
+    return new ProviderError("REJECTED", detail ? `O Mercado Pago recusou a cobrança: ${detail}` : "O Mercado Pago recusou a solicitação.", false, detail);
+  }
+
+  // Sem status HTTP mas com corpo de erro estruturado → é uma rejeição do provedor
+  // (não uma indisponibilidade). Antes isso caía no default e virava 504 mascarado.
+  if (hasErrorBody && detail) {
+    return new ProviderError("REJECTED", `O Mercado Pago recusou a cobrança: ${detail}`, false, detail);
+  }
+
+  // Falha de rede/desconhecida sem resposta do provedor → transitório.
+  return new ProviderError("UNAVAILABLE", "O Mercado Pago está temporariamente indisponível.", true, detail ?? value.message);
 }
 
 function expirationDuration(minutes: number): string {

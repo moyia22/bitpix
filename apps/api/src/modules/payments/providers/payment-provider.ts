@@ -52,6 +52,8 @@ export class ProviderError extends Error {
     public readonly code: "INVALID_CREDENTIAL" | "PERMISSION_DENIED" | "TIMEOUT" | "UNAVAILABLE" | "INVALID_RESPONSE" | "REJECTED",
     message: string,
     public readonly retryable = false,
+    // Motivo bruto retornado pelo provedor (para log/auditoria); nunca contém segredos.
+    public readonly detail?: string,
   ) {
     super(message);
     this.name = "ProviderError";

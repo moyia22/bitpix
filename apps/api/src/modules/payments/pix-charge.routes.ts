@@ -134,8 +134,12 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
       throw error;
     }
 
+    const startedAt = Date.now();
+    request.log.info({ chargePublicId: created.publicId, saleCode: body.code, amount: moneyToString(amount), providerMode: env.PAYMENT_PROVIDER_MODE }, "[PIX] Iniciando criação");
     try {
       const provider = getPaymentProvider();
+      request.log.info({ chargePublicId: created.publicId }, "[PIX] Enviando ao Mercado Pago");
+      const providerStartedAt = Date.now();
       const result = await provider.createPixCharge({
         amount: moneyToString(amount),
         externalReference: body.code,
@@ -145,7 +149,9 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
         idempotencyKey,
         accessToken: decryptCredential(configuration),
       });
+      request.log.info({ chargePublicId: created.publicId, providerMs: Date.now() - providerStartedAt, providerStatus: result.status }, "[PIX] Mercado Pago respondeu");
       const status = toPixChargeStatus(result.status);
+      request.log.info({ chargePublicId: created.publicId }, "[PIX] Salvando cobrança");
       await prisma.$transaction(async (tx) => {
         const charge = await tx.pixCharge.update({
           where: { id: created.id },
@@ -167,18 +173,24 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
         return charge.id;
       });
       const persisted = await prisma.pixCharge.findUniqueOrThrow({ where: { id: created.id }, include: pixChargeInclude });
+      request.log.info({ chargePublicId: created.publicId, totalMs: Date.now() - startedAt }, "[PIX] Resposta enviada");
       return { data: pixChargeDto(persisted) };
     } catch (error) {
       const retryable = error instanceof ProviderError && error.retryable;
+      const providerCode = error instanceof ProviderError ? error.code : "UNKNOWN";
+      const providerDetail = error instanceof ProviderError ? error.detail : undefined;
       const status = retryable ? PixChargeStatus.CREATING : PixChargeStatus.FAILED;
       const message = error instanceof ProviderError ? error.message : "Falha inesperada ao criar a cobrança.";
+      // Log com o motivo REAL do provedor — antes essa causa ficava invisível (só 504 genérico).
+      request.log.error({ chargePublicId: created.publicId, totalMs: Date.now() - startedAt, providerCode, providerDetail, retryable, err: error }, "[PIX] Falha ao criar cobrança no Mercado Pago");
+      const reason = (providerDetail ? `${message} (${providerDetail})` : message).slice(0, 240);
       await prisma.$transaction(async (tx) => {
         await tx.pixCharge.update({
           where: { id: created.id },
-          data: { status, lastError: message.slice(0, 240), statusHistory: { create: { companyId: auth.companyId, previousStatus: PixChargeStatus.CREATING, status, source: PixChargeStatusSource.PROVIDER, reason: message.slice(0, 240) } } },
+          data: { status, lastError: reason, statusHistory: { create: { companyId: auth.companyId, previousStatus: PixChargeStatus.CREATING, status, source: PixChargeStatusSource.PROVIDER, reason } } },
         });
         if (!retryable) await tx.sale.update({ where: { id: created.saleId }, data: { status: SaleStatus.FAILED } });
-        await writeAudit({ request, client: tx, action: "pix.charge.creation_failed", entity: "PixCharge", entityPublicId: created.publicId, outcome: AuditOutcome.FAILURE, metadata: { retryable, providerMode: env.PAYMENT_PROVIDER_MODE, errorCode: error instanceof ProviderError ? error.code : "UNKNOWN" } });
+        await writeAudit({ request, client: tx, action: "pix.charge.creation_failed", entity: "PixCharge", entityPublicId: created.publicId, outcome: AuditOutcome.FAILURE, metadata: { retryable, providerMode: env.PAYMENT_PROVIDER_MODE, errorCode: providerCode, ...(providerDetail ? { providerDetail: providerDetail.slice(0, 240) } : {}) } });
       });
       throw new AppError(retryable ? 504 : 502, retryable ? "PROVIDER_TIMEOUT" : "PROVIDER_CHARGE_FAILED", message, { chargePublicId: created.publicId, retryable });
     }
