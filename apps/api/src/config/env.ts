@@ -31,7 +31,7 @@ const envSchema = z.object({
   S3_ACCESS_KEY: z.string().min(3).optional(),
   S3_SECRET_KEY: z.string().min(8).optional(),
   S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
-  S3_SERVER_SIDE_ENCRYPTION: z.enum(["AES256", "aws:kms"]).default("AES256"),
+  S3_SERVER_SIDE_ENCRYPTION: z.enum(["AES256", "aws:kms", "none"]).default("AES256"),
   SMTP_HOST: z.string().min(1).optional(),
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
   SMTP_SECURE: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
