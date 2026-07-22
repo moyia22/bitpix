@@ -30,6 +30,9 @@ export async function login(
   const normalizedEmail = email.trim().toLowerCase();
   const user = await prisma.user.findUnique({
     where: { normalizedEmail },
+    // Uma única query (LATERAL JOIN) para usuário + empresa + filial + funções +
+    // permissões, em vez de ~8 round-trips ao banco.
+    relationLoadStrategy: "join",
     include: {
       company: true,
       branch: true,

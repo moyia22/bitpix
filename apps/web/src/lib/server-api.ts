@@ -1,6 +1,7 @@
 import type { SessionPrincipal } from "@bitpix/contracts";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 const apiUrl = process.env.API_URL ?? "http://localhost:3333";
 
@@ -19,7 +20,9 @@ export async function apiFetch<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function requireSession(): Promise<SessionPrincipal> {
+// Memoizado por request: layout, header, sidebar e página compartilham UMA
+// única chamada a /auth/me (o principal) em vez de repetir o auth guard.
+export const requireSession = cache(async (): Promise<SessionPrincipal> => {
   const response = await fetch(`${apiUrl}/api/v1/auth/me`, {
     headers: { cookie: await cookieHeader() },
     cache: "no-store",
@@ -27,4 +30,4 @@ export async function requireSession(): Promise<SessionPrincipal> {
   if (!response.ok) redirect("/login");
   const body = await response.json() as { data: SessionPrincipal };
   return body.data;
-}
+});

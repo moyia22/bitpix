@@ -14,6 +14,9 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
   const tokenHash = hashSessionToken(token);
   const session = await prisma.userSession.findUnique({
     where: { tokenHash },
+    // Carrega sessão + empresa + usuário + filial + funções + permissões em UMA
+    // única query (LATERAL JOIN) em vez de ~8 round-trips ao banco.
+    relationLoadStrategy: "join",
     include: {
       company: true,
       user: {

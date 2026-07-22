@@ -5,8 +5,9 @@ import { AppShell } from "@/components/app-shell";
 import { apiFetch, requireSession } from "@/lib/server-api";
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const principal = await requireSession();
-  const pathname = (await headers()).get("x-pathname") ?? "";
+  // Independentes → em paralelo (o principal é memoizado e reusado pela página).
+  const [principal, headerList] = await Promise.all([requireSession(), headers()]);
+  const pathname = headerList.get("x-pathname") ?? "";
 
   // Portões pós-login: força configurar 2FA ou trocar a senha antes de usar o resto.
   if (principal.mfaEnrollmentPending && pathname !== "/configuracoes/seguranca") redirect("/configuracoes/seguranca");
