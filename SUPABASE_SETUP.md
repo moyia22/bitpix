@@ -29,6 +29,13 @@ DIRECT_URL=postgresql://postgres.<REF>:<SENHA>@aws-0-<REGIAO>.pooler.supabase.co
 > garante que as migrations rodem sem o modo *transaction* do PgBouncer. O
 > `prisma.config.ts` já está configurado com `directUrl`.
 
+> **TLS:** basta `?sslmode=require`. O app já lida com a cadeia TLS do pooler do
+> Supabase automaticamente (adiciona `uselibpqcompat=true` para hosts remotos no
+> runtime), então você não precisa de nenhuma flag extra na connection string.
+
+> **Senha com caracteres especiais:** se a senha do banco tiver `@`, `#`, `/`, `?`
+> etc., codifique na URL (ex.: `@` → `%40`), senão a connection string quebra.
+
 ## 3. Aplicar o schema (migrations)
 Com o `.env` preenchido:
 ```bash
