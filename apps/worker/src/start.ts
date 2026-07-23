@@ -4,10 +4,11 @@ import { config } from "dotenv";
 import Redis from "ioredis";
 
 config({ path: resolve(process.cwd(), "../../.env") });
-const [{ prisma }, { MercadoPagoWebhookProcessor }, { processExportJob }] = await Promise.all([
+const [{ prisma }, { MercadoPagoWebhookProcessor }, { processExportJob }, { runDailyReconciliation }] = await Promise.all([
   import("@bitpix/database"),
   import("@bitpix/api/webhook-processor"),
   import("@bitpix/api/export-processor"),
+  import("@bitpix/api/daily-reconciliation"),
 ]);
 
 const redisUrl = process.env.REDIS_URL;
@@ -24,14 +25,26 @@ await maintenanceQueue.upsertJobScheduler(
   { every: 60 * 60 * 1000 },
   { name: "sessions.prune", data: {} },
 );
+// Conciliação financeira diária às 05:00 (UTC do container); usa o fuso de cada
+// empresa para delimitar "ontem" e notifica o admin se houver inconsistências.
+await maintenanceQueue.upsertJobScheduler(
+  "daily-reconciliation",
+  { pattern: "0 5 * * *" },
+  { name: "reconciliation.daily", data: {} },
+);
 
 const maintenanceWorker = new Worker(
   "bitpix-maintenance",
   async (job) => {
-    if (job.name !== "sessions.prune") throw new Error(`Tipo de trabalho não suportado: ${job.name}`);
-    const threshold = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const result = await prisma.userSession.deleteMany({ where: { OR: [{ expiresAt: { lt: threshold } }, { revokedAt: { lt: threshold } }] } });
-    return { deletedSessions: result.count };
+    if (job.name === "sessions.prune") {
+      const threshold = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const result = await prisma.userSession.deleteMany({ where: { OR: [{ expiresAt: { lt: threshold } }, { revokedAt: { lt: threshold } }] } });
+      return { deletedSessions: result.count };
+    }
+    if (job.name === "reconciliation.daily") {
+      return runDailyReconciliation();
+    }
+    throw new Error(`Tipo de trabalho não suportado: ${job.name}`);
   },
   { connection, concurrency: 2 },
 );

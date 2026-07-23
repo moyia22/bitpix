@@ -83,7 +83,7 @@ async function closingRows(companyId: string, ctx: Awaited<ReturnType<typeof con
     .sort((a, b) => Number(b.pixRecebido) - Number(a.pixRecebido));
 }
 
-async function reconciliationRows(companyId: string, from: Date, to: Date): Promise<ReportRow[]> {
+export async function reconciliationRows(companyId: string, from: Date, to: Date): Promise<ReportRow[]> {
   const [payments, movements, charges, refunds, webhooks] = await Promise.all([
     prisma.pixPayment.findMany({ where: { companyId, paidAt: { gte: from, lte: to } }, include: { sale: true, pixCharge: true } }),
     prisma.cashMovement.findMany({ where: { companyId, createdAt: { gte: from, lte: to }, type: { in: ["PIX_PAYMENT", "PIX_REFUND"] } } }),

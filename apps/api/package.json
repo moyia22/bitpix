@@ -12,6 +12,10 @@
     "./export-processor": {
       "types": "./dist/modules/reports/export.processor.d.ts",
       "import": "./dist/modules/reports/export.processor.js"
+    },
+    "./daily-reconciliation": {
+      "types": "./dist/modules/reports/daily-reconciliation.d.ts",
+      "import": "./dist/modules/reports/daily-reconciliation.js"
     }
   },
   "scripts": {
