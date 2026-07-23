@@ -73,6 +73,82 @@ function expirationDuration(minutes: number): string {
   return `PT${minutes}M`;
 }
 
+// Forma da resposta da Orders API do Mercado Pago (sucesso e erro).
+interface MpOrderResponse {
+  id?: string; status?: string; status_detail?: string; external_reference?: string;
+  total_amount?: string; created_date?: string;
+  message?: string; error?: string;
+  cause?: Array<{ code?: string | number; description?: string }>;
+  errors?: Array<{ code?: string; message?: string; details?: unknown }>;
+  transactions?: {
+    payments?: Array<{
+      id?: string; status?: string; status_detail?: string; date_of_expiration?: string;
+      payment_method?: { qr_code?: string; qr_code_base64?: string; ticket_url?: string };
+    }>;
+  };
+}
+
+function truncate(value: unknown, max = 300): string | null {
+  if (value === null || value === undefined) return null;
+  try { return (typeof value === "string" ? value : JSON.stringify(value)).slice(0, max); }
+  catch { return null; }
+}
+
+// Captura sanitizada da resposta do Mercado Pago. NUNCA inclui access token,
+// Authorization, cookie, QR Code, payload Pix completo ou identificação do pagador.
+function sanitizeMpResponse(httpStatus: number, requestId: string | null, body: MpOrderResponse): Record<string, unknown> {
+  const payment = body.transactions?.payments?.[0];
+  return {
+    httpStatus,
+    requestId,
+    message: body.message ?? null,
+    error: body.error ?? null,
+    orderStatus: body.status ?? null,
+    orderStatusDetail: body.status_detail ?? null,
+    paymentStatus: payment?.status ?? null,
+    paymentStatusDetail: payment?.status_detail ?? null,
+    cause: Array.isArray(body.cause) ? body.cause.map((c) => ({ code: c?.code ?? null, description: truncate(c?.description) })) : null,
+    errors: Array.isArray(body.errors) ? body.errors.map((e) => ({ code: e?.code ?? null, message: truncate(e?.message), details: truncate(e?.details) })) : null,
+  };
+}
+
+// Motivo mais específico disponível, do mais preciso ao mais genérico.
+function specificDetail(body: MpOrderResponse): string {
+  const payment = body.transactions?.payments?.[0];
+  const errorsJoined = Array.isArray(body.errors)
+    ? body.errors.map((e) => [e?.code, e?.message].filter(Boolean).join(": ")).filter(Boolean).join(" | ")
+    : "";
+  const causeJoined = Array.isArray(body.cause)
+    ? body.cause.map((c) => [c?.code, c?.description].filter(Boolean).join(": ")).filter(Boolean).join(" | ")
+    : "";
+  return (payment?.status_detail || body.status_detail || errorsJoined || causeJoined || body.message || body.error || "recusada pelo provedor").slice(0, 400);
+}
+
+// Mensagem segura e específica para o operador, a partir do motivo bruto do MP.
+function friendlyRejection(detail: string): string {
+  const d = detail.toLowerCase();
+  if (d.includes("pix") && /(not|unavailable|enabled|disabled|habilit|indispon)/.test(d)) {
+    return "A conta do Mercado Pago não está habilitada para receber Pix. Cadastre e valide uma chave Pix na conta do recebedor.";
+  }
+  if (d.includes("collector") || (d.includes("payer") && d.includes("same"))) {
+    return "O pagador não pode ser o mesmo titular da conta que recebe. Ajuste o e-mail do pagador da cobrança.";
+  }
+  if (d.includes("email")) return "O e-mail do pagador foi recusado pelo Mercado Pago. Use um e-mail válido.";
+  if (d.includes("amount")) return "O valor da cobrança foi recusado pelo Mercado Pago. Verifique o valor mínimo/máximo.";
+  return `O Mercado Pago recusou a cobrança (${detail}).`;
+}
+
+// Erro de uma resposta HTTP não-2xx (ou order sem Pix) da criação de cobrança.
+function rejectionError(httpStatus: number, requestId: string | null, body: MpOrderResponse): ProviderError {
+  const sanitized = sanitizeMpResponse(httpStatus, requestId, body);
+  const detail = specificDetail(body);
+  if (httpStatus === 401) return new ProviderError("INVALID_CREDENTIAL", "Access Token recusado pelo Mercado Pago.", false, detail, sanitized);
+  if (httpStatus === 403) return new ProviderError("PERMISSION_DENIED", "A credencial não tem permissão para criar cobranças Pix.", false, detail, sanitized);
+  if (httpStatus === 429) return new ProviderError("UNAVAILABLE", "Limite de requisições do Mercado Pago atingido. Tente novamente.", true, detail, sanitized);
+  if (httpStatus >= 500) return new ProviderError("UNAVAILABLE", "O Mercado Pago está temporariamente indisponível.", true, detail, sanitized);
+  return new ProviderError("REJECTED", friendlyRejection(detail), false, detail, sanitized);
+}
+
 export class MercadoPagoPaymentProvider implements PaymentProvider {
   readonly name = "MERCADO_PAGO" as const;
   readonly mode = "real" as const;
@@ -99,9 +175,18 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
   }
 
   async createPixCharge(input: CreatePixChargeInput): Promise<ProviderPixCharge> {
+    // Chamada direta (mesmo payload de antes), para capturar status HTTP, x-request-id
+    // e o corpo completo de erro — o SDK descartava esses dados na rejeição.
+    let response: Response;
     try {
-      const response = await this.order(input.accessToken).create({
-        body: {
+      response = await fetch(`${env.MERCADO_PAGO_API_BASE_URL}/v1/orders`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${input.accessToken}`,
+          "content-type": "application/json",
+          "x-idempotency-key": input.idempotencyKey,
+        },
+        body: JSON.stringify({
           type: "online",
           processing_mode: "automatic",
           total_amount: input.amount,
@@ -117,38 +202,45 @@ export class MercadoPagoPaymentProvider implements PaymentProvider {
               payment_method: { id: "pix", type: "bank_transfer" },
             }],
           },
-        },
-        requestOptions: { idempotencyKey: input.idempotencyKey },
+        }),
+        signal: AbortSignal.timeout(env.PAYMENT_PROVIDER_TIMEOUT_MS),
       });
-      const payment = response.transactions?.payments?.[0];
-      const qrCodeText = payment?.payment_method?.qr_code;
-      const qrCodeBase64 = payment?.payment_method?.qr_code_base64;
-      if (!response.id || !qrCodeText || !qrCodeBase64) {
-        throw new ProviderError("INVALID_RESPONSE", "O Mercado Pago não retornou os dados obrigatórios do Pix.");
-      }
-      return {
-        providerOrderId: response.id,
-        providerPaymentId: payment.id ?? null,
-        status: mapProviderStatus(payment.status ?? response.status, payment.status_detail ?? response.status_detail),
-        qrCodeText,
-        qrCodeBase64: qrCodeBase64.replace(/^data:image\/[a-z+]+;base64,/i, ""),
-        ticketUrl: payment.payment_method?.ticket_url ?? null,
-        expiresAt: payment.date_of_expiration ? new Date(payment.date_of_expiration) : new Date(Date.now() + input.expirationMinutes * 60_000),
-        sanitizedResponse: {
-          mock: false,
-          orderId: response.id,
-          paymentId: payment.id ?? null,
-          orderStatus: response.status ?? null,
-          paymentStatus: payment.status ?? null,
-          statusDetail: payment.status_detail ?? response.status_detail ?? null,
-          externalReference: response.external_reference ?? input.externalReference,
-          amount: response.total_amount ?? input.amount,
-          createdDate: response.created_date ?? null,
-        },
-      };
     } catch (error) {
+      // Timeout/rede (AbortError etc.) → transitório.
       throw providerError(error);
     }
+
+    const requestId = response.headers.get("x-request-id") ?? response.headers.get("x-mp-request-id");
+    const body = await response.json().catch(() => ({})) as MpOrderResponse;
+
+    if (!response.ok) throw rejectionError(response.status, requestId, body);
+
+    const payment = body.transactions?.payments?.[0];
+    const qrCodeText = payment?.payment_method?.qr_code;
+    const qrCodeBase64 = payment?.payment_method?.qr_code_base64;
+    // Order criada (2xx) mas o pagamento Pix não gerou QR → transação recusada: expõe o motivo real.
+    if (!body.id || !qrCodeText || !qrCodeBase64) throw rejectionError(response.status, requestId, body);
+
+    return {
+      providerOrderId: body.id,
+      providerPaymentId: payment?.id ?? null,
+      status: mapProviderStatus(payment?.status ?? body.status, payment?.status_detail ?? body.status_detail),
+      qrCodeText,
+      qrCodeBase64: qrCodeBase64.replace(/^data:image\/[a-z+]+;base64,/i, ""),
+      ticketUrl: payment?.payment_method?.ticket_url ?? null,
+      expiresAt: payment?.date_of_expiration ? new Date(payment.date_of_expiration) : new Date(Date.now() + input.expirationMinutes * 60_000),
+      sanitizedResponse: {
+        mock: false,
+        orderId: body.id,
+        paymentId: payment?.id ?? null,
+        orderStatus: body.status ?? null,
+        paymentStatus: payment?.status ?? null,
+        statusDetail: payment?.status_detail ?? body.status_detail ?? null,
+        externalReference: body.external_reference ?? input.externalReference,
+        amount: body.total_amount ?? input.amount,
+        createdDate: body.created_date ?? null,
+      },
+    };
   }
 
   async cancelPixCharge(input: { providerOrderId: string; idempotencyKey: string; accessToken: string }): Promise<void> {

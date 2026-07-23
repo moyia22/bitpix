@@ -147,7 +147,19 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
     request.log.info({ chargePublicId: created.publicId, saleCode: body.code, amount: moneyToString(amount), providerMode: env.PAYMENT_PROVIDER_MODE }, "[PIX] Iniciando criação");
     try {
       const provider = getPaymentProvider();
-      request.log.info({ chargePublicId: created.publicId }, "[PIX] Enviando ao Mercado Pago");
+      // Payload sanitizado enviado ao MP (sem token, e-mail completo, QR ou segredo).
+      request.log.info({
+        chargePublicId: created.publicId,
+        payload: {
+          type: "online", processing_mode: "automatic", currency: "BRL",
+          total_amount: moneyToString(amount),
+          external_reference: body.code,
+          payer_email_domain: auth.principal.user.email.split("@")[1] ?? null,
+          expiration: `${configuration.pixExpirationMinutes}min`,
+          payment_method: { id: "pix", type: "bank_transfer" },
+          has_description: Boolean(body.description),
+        },
+      }, "[PIX] Enviando ao Mercado Pago");
       const providerStartedAt = Date.now();
       const result = await provider.createPixCharge({
         amount: moneyToString(amount),
@@ -188,10 +200,12 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
       const retryable = error instanceof ProviderError && error.retryable;
       const providerCode = error instanceof ProviderError ? error.code : "UNKNOWN";
       const providerDetail = error instanceof ProviderError ? error.detail : undefined;
+      const providerSanitized = error instanceof ProviderError ? error.sanitized : undefined;
       const status = retryable ? PixChargeStatus.CREATING : PixChargeStatus.FAILED;
       const message = error instanceof ProviderError ? error.message : "Falha inesperada ao criar a cobrança.";
-      // Log com o motivo REAL do provedor — antes essa causa ficava invisível (só 504 genérico).
-      request.log.error({ chargePublicId: created.publicId, totalMs: Date.now() - startedAt, providerCode, providerDetail, retryable, err: error }, "[PIX] Falha ao criar cobrança no Mercado Pago");
+      // Log com a RESPOSTA COMPLETA sanitizada do provedor (status HTTP, request-id, cause,
+      // status_detail) — antes só o motivo genérico aparecia. Sem token/cookie/QR/segredo.
+      request.log.error({ chargePublicId: created.publicId, totalMs: Date.now() - startedAt, providerCode, providerDetail, providerResponse: providerSanitized, retryable, err: error }, "[PIX] Falha ao criar cobrança no Mercado Pago");
       const reason = (providerDetail ? `${message} (${providerDetail})` : message).slice(0, 240);
       await prisma.$transaction(async (tx) => {
         await tx.pixCharge.update({

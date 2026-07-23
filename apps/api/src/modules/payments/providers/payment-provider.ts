@@ -54,6 +54,9 @@ export class ProviderError extends Error {
     public readonly retryable = false,
     // Motivo bruto retornado pelo provedor (para log/auditoria); nunca contém segredos.
     public readonly detail?: string,
+    // Resposta completa sanitizada do provedor (status HTTP, request-id, cause, etc.);
+    // nunca contém access token, Authorization, cookie, QR Code ou payload Pix.
+    public readonly sanitized?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "ProviderError";
