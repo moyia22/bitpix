@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { ReportConsole } from "@/features/reports/report-console";
 import { apiFetch, requireSession } from "@/lib/server-api";
-const validTypes = ["sales","payments","charges","cash-sessions","cash-movements","reconciliation"] as const;
+const validTypes = ["sales","payments","charges","closing","cash-sessions","cash-movements","reconciliation"] as const;
 type ReportType = typeof validTypes[number];
 interface OperatorOption { publicId: string; name: string }
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{type?:string;from?:string;to?:string;search?:string;operator?:string}> }) {

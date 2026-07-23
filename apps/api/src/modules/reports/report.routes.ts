@@ -17,6 +17,7 @@ const endpoints: Array<{ path: string; type: ReportType; permission: PermissionK
   { path: "/reports/cash-sessions", type: "CASH_SESSIONS", permission: "reports.cash.read" },
   { path: "/reports/cash-movements", type: "CASH_MOVEMENTS", permission: "reports.cash.read" },
   { path: "/reports/reconciliation", type: "RECONCILIATION", permission: "reports.reconciliation.read" },
+  { path: "/reports/closing", type: "CLOSING", permission: "reports.cash.read" },
 ];
 
 export async function reportRoutes(app: FastifyInstance): Promise<void> {

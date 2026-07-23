@@ -5,7 +5,7 @@ import { AppError } from "../../lib/errors.js";
 import { analyticsPeriod } from "../dashboard/analytics.service.js";
 
 export type ReportFilters = z.infer<typeof reportFilterSchema>;
-export type ReportType = "SALES" | "PAYMENTS" | "CHARGES" | "CASH_SESSIONS" | "CASH_MOVEMENTS" | "RECONCILIATION" | "AUDIT";
+export type ReportType = "SALES" | "PAYMENTS" | "CHARGES" | "CASH_SESSIONS" | "CASH_MOVEMENTS" | "RECONCILIATION" | "AUDIT" | "CLOSING";
 export type ReportRow = Record<string, string | number | null>;
 
 async function context(companyId: string, filters: ReportFilters) {
@@ -56,8 +56,31 @@ export async function reportRows(companyId: string, type: ReportType, filters: R
     const [items, total] = await Promise.all([prisma.auditLog.findMany({ where, include: { actor: { select: { name: true } }, branch: { select: { name: true } } }, orderBy: { createdAt: "desc" }, skip, take }), prisma.auditLog.count({ where })]);
     return { total, timezone: ctx.timezone, rows: items.map((item) => ({ auditoriaId: item.publicId, acao: item.action, entidade: item.entity, resultado: item.outcome, usuario: item.actor?.name ?? "Sistema", filial: item.branch?.name ?? null, correlationId: item.correlationId, data: item.createdAt.toISOString() })) };
   }
+  if (type === "CLOSING") {
+    const rows = await closingRows(companyId, ctx);
+    return { total: rows.length, timezone: ctx.timezone, rows: exportLimit ? rows.slice(0, exportLimit) : page(rows, filters).data };
+  }
   const issues = await reconciliationRows(companyId, ctx.period.from, ctx.period.to);
   return { total: issues.length, timezone: ctx.timezone, rows: exportLimit ? issues.slice(0, exportLimit) : page(issues, filters).data };
+}
+
+// Fechamento consolidado por atendente: para o período, soma o Pix recebido e os
+// estornos confirmados de cada operador, mais os caixas ainda abertos. É o "Z"
+// que o admin usa para lançar no sistema oficial da empresa.
+async function closingRows(companyId: string, ctx: Awaited<ReturnType<typeof context>>): Promise<ReportRow[]> {
+  const [payments, refunds, openSessions] = await Promise.all([
+    prisma.pixPayment.findMany({ where: { companyId, paidAt: { gte: ctx.period.from, lte: ctx.period.to }, ...(ctx.operatorId ? { sale: { operatorId: ctx.operatorId } } : {}), ...(ctx.branchId ? { branchId: ctx.branchId } : {}) }, select: { amount: true, sale: { select: { operator: { select: { publicId: true, name: true } } } } } }),
+    prisma.pixRefund.findMany({ where: { companyId, status: "PROCESSED", processedAt: { gte: ctx.period.from, lte: ctx.period.to }, ...(ctx.operatorId ? { pixPayment: { sale: { operatorId: ctx.operatorId } } } : {}) }, select: { amount: true, pixPayment: { select: { sale: { select: { operator: { select: { publicId: true, name: true } } } } } } } }),
+    prisma.cashSession.findMany({ where: { companyId, status: "OPEN", ...(ctx.operatorId ? { operatorId: ctx.operatorId } : {}), ...(ctx.branchId ? { branchId: ctx.branchId } : {}) }, select: { operator: { select: { publicId: true, name: true } } } }),
+  ]);
+  const acc = new Map<string, { operador: string; pagamentos: number; pixRecebido: Prisma.Decimal; estornosCount: number; estornado: Prisma.Decimal; caixasAbertos: number }>();
+  const ensure = (publicId: string, name: string) => { let row = acc.get(publicId); if (!row) { row = { operador: name, pagamentos: 0, pixRecebido: new Prisma.Decimal(0), estornosCount: 0, estornado: new Prisma.Decimal(0), caixasAbertos: 0 }; acc.set(publicId, row); } return row; };
+  for (const payment of payments) { const row = ensure(payment.sale.operator.publicId, payment.sale.operator.name); row.pagamentos += 1; row.pixRecebido = row.pixRecebido.plus(payment.amount); }
+  for (const refund of refunds) { const op = refund.pixPayment.sale.operator; const row = ensure(op.publicId, op.name); row.estornosCount += 1; row.estornado = row.estornado.plus(refund.amount); }
+  for (const session of openSessions) ensure(session.operator.publicId, session.operator.name).caixasAbertos += 1;
+  return [...acc.values()]
+    .map((row) => ({ operador: row.operador, pagamentos: row.pagamentos, pixRecebido: row.pixRecebido.toFixed(2), estornos: row.estornosCount, valorEstornado: row.estornado.toFixed(2), liquido: row.pixRecebido.minus(row.estornado).toFixed(2), caixasAbertos: row.caixasAbertos }))
+    .sort((a, b) => Number(b.pixRecebido) - Number(a.pixRecebido));
 }
 
 async function reconciliationRows(companyId: string, from: Date, to: Date): Promise<ReportRow[]> {
