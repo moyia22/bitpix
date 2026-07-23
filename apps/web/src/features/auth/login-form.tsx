@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, LoaderCircle, LogIn, ShieldCheck } from "lucide-react";
+import { Check, Eye, EyeOff, LoaderCircle, LogIn, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { landingPathFor } from "@/lib/landing";
 
@@ -11,6 +11,7 @@ export function LoginForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
+  const [succeeded, setSucceeded] = useState(false);
   const [useRecovery, setUseRecovery] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
@@ -43,9 +44,11 @@ export function LoginForm() {
         setError(body.error?.message ?? "Não foi possível entrar.");
         return;
       }
-      // Direciona para a primeira página que o papel do usuário pode usar.
+      // Animação de boas-vindas, depois direciona para a primeira página do papel.
       const body = await response.json() as { data?: { permissions?: string[] } };
-      window.location.assign(landingPathFor(body.data?.permissions ?? []));
+      const target = landingPathFor(body.data?.permissions ?? []);
+      setSucceeded(true);
+      window.setTimeout(() => window.location.assign(target), 700);
     } catch {
       setError("A API não está disponível. Verifique se os serviços estão ativos.");
     } finally {
@@ -84,9 +87,9 @@ export function LoginForm() {
       )}
 
       {error && <div role="alert" className="rounded-xl border border-[color-mix(in_srgb,var(--danger)_25%,var(--border))] bg-[var(--danger-soft)] px-4 py-3 text-sm font-semibold text-[var(--danger)]">{error}</div>}
-      <button className="primary-button w-full" type="submit" disabled={busy}>
-        {busy ? <LoaderCircle className="animate-spin" size={19} /> : mfaRequired ? <ShieldCheck size={19} /> : <LogIn size={19} />}
-        {busy ? "Entrando..." : mfaRequired ? "Confirmar e entrar" : "Entrar no BitPix"}
+      <button className={`primary-button w-full ${succeeded ? "login-success-btn" : ""}`} type="submit" disabled={busy || succeeded}>
+        {succeeded ? <Check size={19} /> : busy ? <LoaderCircle className="animate-spin" size={19} /> : mfaRequired ? <ShieldCheck size={19} /> : <LogIn size={19} />}
+        {succeeded ? "Bem-vindo!" : busy ? "Entrando..." : mfaRequired ? "Confirmar e entrar" : "Entrar no BitPix"}
       </button>
     </form>
   );

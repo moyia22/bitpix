@@ -1197,6 +1197,26 @@ a {
 /* Etapa "Pix" pulsando enquanto o pagamento não confirma. */
 .step-live { animation: step-live-pulse 1.7s ease-out infinite; }
 @keyframes step-live-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 45%, transparent); } 70% { box-shadow: 0 0 0 10px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* Logo com vida ao passar o mouse. */
+.brand-mark-anim { transition: transform 0.28s var(--ease-spring), filter 0.28s ease; will-change: transform; }
+.brand-mark-anim:hover, a:hover > .brand-mark-anim { transform: translateY(-2px) scale(1.06) rotate(-2deg); filter: drop-shadow(0 8px 18px color-mix(in srgb, var(--primary) 38%, transparent)); }
+
+/* Login bem-sucedido: botão vira confirmação verde com pulso. */
+.login-success-btn { background-image: linear-gradient(135deg, var(--success), color-mix(in srgb, var(--success) 78%, #067a4e)) !important; animation: ring-pulse 0.9s ease-out 1; }
+
+/* Anel de celebração expandindo no selo de pagamento confirmado. */
+.pix-paid-icon { position: relative; }
+.pix-paid-icon::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; border: 2px solid color-mix(in srgb, var(--success) 60%, transparent); animation: burst-ring 0.85s var(--ease-out) 0.65s both; pointer-events: none; }
+@keyframes burst-ring { from { transform: scale(0.7); opacity: 1; } to { transform: scale(1.9); opacity: 0; } }
+
+/* Comprovante visível no site (preview estilo cupom). */
+.receipt-preview { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 4px; border: 1.5px dashed var(--border-strong); border-radius: 14px; padding: 18px 16px; text-align: center; background: var(--surface-subtle); animation: reveal-up 0.35s var(--ease-out) both; }
+.receipt-preview h4 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; }
+.receipt-preview p { margin: 0; font-size: 0.86rem; color: var(--ink-muted); }
+.receipt-preview strong { font-size: 1.35rem; font-weight: 800; margin: 4px 0; }
+.receipt-preview small { color: var(--ink-faint); }
+.receipt-preview b { margin-top: 8px; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; }
 @keyframes sheen { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* --- Chrome: topbar de vidro e sidebar com profundidade --- */

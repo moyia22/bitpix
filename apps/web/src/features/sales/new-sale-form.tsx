@@ -51,7 +51,8 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
   const amountRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
-  const [emailOpen, setEmailOpen] = useState(false);
+  const [description, setDescription] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [amountInCents, setAmountInCents] = useState(0);
   const [charge, setCharge] = useState<PixChargeDto | null>(null);
   const [error, setError] = useState("");
@@ -77,12 +78,14 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
   const handleCodeKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Enter") { event.preventDefault(); amountRef.current?.focus(); }
   };
-  const updateAmount = (rawValue: string) => setAmountInCents(Number(rawValue.replace(/\D/g, "").slice(0, 9) || 0));
-  const addAmount = (cents: number) => { setAmountInCents((previous) => Math.min(previous + cents, 99_999_999)); amountRef.current?.focus(); };
+  // Feedback tátil: o valor "pulsa" a cada alteração, deixando claro o que mudou.
+  const popAmount = () => amountRef.current?.animate([{ transform: "scale(1.045)" }, { transform: "scale(1)" }], { duration: 130, easing: "ease-out" });
+  const updateAmount = (rawValue: string) => { setAmountInCents(Number(rawValue.replace(/\D/g, "").slice(0, 9) || 0)); popAmount(); };
+  const addAmount = (cents: number) => { setAmountInCents((previous) => Math.min(previous + cents, 99_999_999)); popAmount(); amountRef.current?.focus(); };
   const clearAmount = () => { setAmountInCents(0); amountRef.current?.focus(); };
-  const pushDigit = (digit: number) => { setAmountInCents((previous) => Math.min(previous * 10 + digit, 99_999_999)); amountRef.current?.focus(); };
-  const pushDoubleZero = () => { setAmountInCents((previous) => Math.min(previous * 100, 99_999_999)); amountRef.current?.focus(); };
-  const backspaceAmount = () => { setAmountInCents((previous) => Math.floor(previous / 10)); amountRef.current?.focus(); };
+  const pushDigit = (digit: number) => { setAmountInCents((previous) => Math.min(previous * 10 + digit, 99_999_999)); popAmount(); amountRef.current?.focus(); };
+  const pushDoubleZero = () => { setAmountInCents((previous) => Math.min(previous * 100, 99_999_999)); popAmount(); amountRef.current?.focus(); };
+  const backspaceAmount = () => { setAmountInCents((previous) => Math.floor(previous / 10)); popAmount(); amountRef.current?.focus(); };
   const quickAmounts = [500, 1000, 2000, 5000, 10000];
 
   const loadCharge = useCallback(async (publicId: string) => {
@@ -106,16 +109,19 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
     eventNames.forEach((name) => source.addEventListener(name, receive));
     source.onopen = () => setConnectionState("live");
     source.onerror = () => setConnectionState("polling");
-    let pollingDelay = 4_000;
+    let pollingDelay = 2_500;
     let pollingTimer: number | undefined;
     const poll = async () => {
       if (disposed) return;
       if (document.visibilityState === "visible") await loadCharge(chargePublicId).catch(() => undefined);
-      pollingDelay = Math.min(12_000, Math.round(pollingDelay * 1.25));
+      pollingDelay = Math.min(10_000, Math.round(pollingDelay * 1.25));
       pollingTimer = window.setTimeout(() => void poll(), pollingDelay);
     };
     pollingTimer = window.setTimeout(() => void poll(), pollingDelay);
-    return () => { disposed = true; source.close(); if (pollingTimer) window.clearTimeout(pollingTimer); };
+    // Ao voltar para a aba, consulta imediatamente (confirmação aparece na hora).
+    const onVisible = () => { if (!disposed && document.visibilityState === "visible") void loadCharge(chargePublicId).catch(() => undefined); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { disposed = true; source.close(); if (pollingTimer) window.clearTimeout(pollingTimer); document.removeEventListener("visibilitychange", onVisible); };
   }, [chargePublicId, chargeStatus, loadCharge]);
 
   useEffect(() => {
@@ -139,7 +145,7 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
     try {
       const response = await fetch(`${apiUrl}/api/v1/pix/charges`, {
         method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: code.trim(), amountInCents, ...(customerEmail.trim() ? { customerEmail: customerEmail.trim() } : {}) }),
+        body: JSON.stringify({ code: code.trim(), amountInCents, ...(customerEmail.trim() ? { customerEmail: customerEmail.trim() } : {}), ...(description.trim() ? { description: description.trim().slice(0, 240) } : {}) }),
       });
       if (!response.ok) {
         const failure = await parseError(response);
@@ -195,7 +201,7 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
     return body.data.receipt;
   }, [charge, paperWidth]);
 
-  const newSale = useCallback(() => { setCharge(null); setCode(""); setCustomerEmail(""); setEmailOpen(false); setAmountInCents(0); setError(""); setConnectionState("idle"); window.setTimeout(() => codeRef.current?.focus(), 0); }, []);
+  const newSale = useCallback(() => { setCharge(null); setCode(""); setCustomerEmail(""); setDescription(""); setDetailsOpen(false); setAmountInCents(0); setError(""); setConnectionState("idle"); window.setTimeout(() => codeRef.current?.focus(), 0); }, [setCharge, setCode, setCustomerEmail, setDescription, setDetailsOpen, setAmountInCents, setError, setConnectionState]);
 
   // ---- Automações das Configurações ----
   // Imprimir comprovante automaticamente quando o pagamento confirma.
@@ -257,7 +263,7 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
           <p className="cash-kicker">Liquidação validada no provedor</p>
           <h2>Pagamento confirmado</h2>
           <p className="pix-paid-value">{moneyFormatter.format(Number(charge.receivedAmount ?? charge.amount))}</p>
-          <div className="pix-reference"><span>Código da venda</span><strong>{charge.saleCode}</strong><span>Confirmado em</span><strong>{charge.paidAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(charge.paidAt)) : "Agora"}</strong><span>Transação</span><strong>{charge.providerPaymentIdMasked ?? "Protegida"}</strong></div>
+          <div className="pix-reference"><span>Código da venda</span><strong>{charge.saleCode}</strong>{charge.description && <><span>Cliente/obs.</span><strong>{charge.description}</strong></>}<span>Confirmado em</span><strong>{charge.paidAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(charge.paidAt)) : "Agora"}</strong><span>Transação</span><strong>{charge.providerPaymentIdMasked ?? "Protegida"}</strong></div>
           <div className="pix-action-grid"><button type="button" className="cash-secondary-button" onClick={() => setPrintOpen(true)}><Printer size={17} /> Imprimir comprovante</button><button type="button" className="primary-button" onClick={newSale}><RotateCcw size={17} /> Nova venda</button></div>
           {printOpen && <div className="pix-print-panel" role="dialog" aria-modal="true" aria-label="Imprimir comprovante"><div><strong>Largura do papel</strong><button type="button" onClick={() => setPrintOpen(false)} aria-label="Fechar"><X size={18} /></button></div><div className="pix-paper-options"><button type="button" data-active={paperWidth === "MM58"} onClick={() => setPaperWidth("MM58")}>58 mm</button><button type="button" data-active={paperWidth === "MM80"} onClick={() => setPaperWidth("MM80")}>80 mm</button></div><button className="primary-button w-full" type="button" onClick={() => void printPaymentReceipt()}><Printer size={18} /> Imprimir comprovante</button></div>}
           <PrintReceipt><h1>{paymentReceipt?.storeName ?? "BitPix"}</h1><p>{paymentReceipt?.title ?? "Pagamento confirmado"}</p><strong>{moneyFormatter.format(Number(paymentReceipt?.amount ?? charge.receivedAmount ?? charge.amount))}</strong><p>Venda {paymentReceipt?.saleCode ?? charge.saleCode}</p><p>Transação {paymentReceipt?.providerPaymentIdMasked ?? charge.providerPaymentIdMasked}</p><p>Operador: {paymentReceipt?.operator ?? "Registrado no sistema"}</p><p>Caixa: {paymentReceipt?.cashRegister ?? charge.cashRegister.name}</p><small>{paymentReceipt?.paidAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(paymentReceipt.paidAt)) : ""}</small><b>{paymentReceipt?.paymentMethod ?? "Pix"} · {paymentReceipt?.disclaimer ?? "Documento não fiscal"}</b></PrintReceipt>
@@ -285,7 +291,7 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
           </div>
         )}
         <div className="pix-amount-line"><span>Valor</span><strong>{moneyFormatter.format(Number(charge.amount))}</strong></div>
-        <div className="pix-reference"><span>Código</span><strong>{charge.saleCode}</strong><span>Expira em</span><strong className="tabular-nums">{remaining}</strong></div>
+        <div className="pix-reference"><span>Código</span><strong>{charge.saleCode}</strong>{charge.description && <><span>Cliente/obs.</span><strong>{charge.description}</strong></>}<span>Expira em</span><strong className="tabular-nums">{remaining}</strong></div>
         <button className="primary-button w-full" type="button" onClick={() => void copyCode()} disabled={!charge.qrCodeText}>
           {copied ? <Check size={19} /> : <Clipboard size={19} />}{copied ? "Código copiado" : "Copiar código Pix"}
         </button>
@@ -368,17 +374,25 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
         <p className="mt-2 text-sm text-[var(--ink-faint)]">Toque nos números ou use os atalhos. Os dois últimos dígitos são os centavos — <strong className="text-[var(--ink-muted)]">1250</strong> vira <strong className="text-[var(--ink-muted)]">R$ 12,50</strong>.</p>
       </div>
       <div>
-        {!emailOpen ? (
-          <button type="button" className="amount-clear" onClick={() => setEmailOpen(true)}>+ E-mail do cliente (opcional)</button>
+        {!detailsOpen ? (
+          <button type="button" className="amount-clear" onClick={() => setDetailsOpen(true)}>+ Detalhes da venda (opcional)</button>
         ) : (
-          <>
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <label className="field-label mb-0" htmlFor="customer-email">E-mail do cliente <span className="font-normal text-[var(--ink-faint)]">(opcional)</span></label>
-              <button type="button" className="amount-clear" onClick={() => { setEmailOpen(false); setCustomerEmail(""); }}><X size={14} /> Remover</button>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <span className="field-label mb-0">Detalhes da venda <span className="font-normal text-[var(--ink-faint)]">(opcional)</span></span>
+              <button type="button" className="amount-clear" onClick={() => { setDetailsOpen(false); setCustomerEmail(""); setDescription(""); }}><X size={14} /> Remover</button>
             </div>
-            <input className="field-input" id="customer-email" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} autoComplete="off" maxLength={180} placeholder="cliente@email.com" autoFocus />
-            <p className="mt-2 text-sm text-[var(--ink-faint)]">Se vazio, usamos o e-mail Pix configurado da empresa.</p>
-          </>
+            <div>
+              <label className="field-label" htmlFor="sale-description">Cliente / observação</label>
+              <input className="field-input" id="sale-description" value={description} onChange={(event) => setDescription(event.target.value)} autoComplete="off" maxLength={240} placeholder="Ex.: Maria — mesa 4" autoFocus />
+              <p className="mt-2 text-sm text-[var(--ink-faint)]">Aparece no comprovante e no histórico, para identificar a venda depois.</p>
+            </div>
+            <div>
+              <label className="field-label" htmlFor="customer-email">E-mail do cliente</label>
+              <input className="field-input" id="customer-email" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} autoComplete="off" maxLength={180} placeholder="cliente@email.com" />
+              <p className="mt-2 text-sm text-[var(--ink-faint)]">Se vazio, usamos o e-mail Pix configurado da empresa.</p>
+            </div>
+          </div>
         )}
       </div>
       {!readiness.configured && <div className="cash-notice cash-notice-error"><span><strong>Mercado Pago não está pronto.</strong><br />Configure e teste a integração antes de cobrar.</span><Link href="/configuracoes/integracoes/mercado-pago" className="cash-secondary-button"><ArrowLeft size={16} /> Configurar</Link></div>}
