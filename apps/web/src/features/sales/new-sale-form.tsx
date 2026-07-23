@@ -41,6 +41,7 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
   const codeRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [amountInCents, setAmountInCents] = useState(0);
   const [charge, setCharge] = useState<PixChargeDto | null>(null);
   const [error, setError] = useState("");
@@ -122,7 +123,7 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
     try {
       const response = await fetch(`${apiUrl}/api/v1/pix/charges`, {
         method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: code.trim(), amountInCents }),
+        body: JSON.stringify({ code: code.trim(), amountInCents, ...(customerEmail.trim() ? { customerEmail: customerEmail.trim() } : {}) }),
       });
       if (!response.ok) {
         const failure = await parseError(response);
@@ -176,7 +177,7 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
     return body.data.receipt;
   };
 
-  const newSale = () => { setCharge(null); setCode(""); setAmountInCents(0); setError(""); setConnectionState("idle"); window.setTimeout(() => codeRef.current?.focus(), 0); };
+  const newSale = () => { setCharge(null); setCode(""); setCustomerEmail(""); setAmountInCents(0); setError(""); setConnectionState("idle"); window.setTimeout(() => codeRef.current?.focus(), 0); };
   const remainingSeconds = charge && clock > 0 ? Math.max(0, Math.floor((new Date(charge.expiresAt).getTime() - clock) / 1_000)) : 0;
   const remaining = `${String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:${String(remainingSeconds % 60).padStart(2, "0")}`;
   const trackingComplete = Boolean(charge && ["PAID", "EXPIRED", "CANCELLED", "FAILED", "REFUNDED"].includes(charge.status));
@@ -283,6 +284,11 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
           </div>
         )}
         <p className="mt-2 text-sm text-[var(--ink-faint)]">Toque nos números ou use os atalhos. Os dois últimos dígitos são os centavos — <strong className="text-[var(--ink-muted)]">1250</strong> vira <strong className="text-[var(--ink-muted)]">R$ 12,50</strong>.</p>
+      </div>
+      <div>
+        <label className="field-label" htmlFor="customer-email">E-mail do cliente <span className="font-normal text-[var(--ink-faint)]">(opcional)</span></label>
+        <input className="field-input" id="customer-email" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} autoComplete="off" maxLength={180} placeholder="cliente@email.com" />
+        <p className="mt-2 text-sm text-[var(--ink-faint)]">Se vazio, usamos o e-mail Pix da empresa. Domínio <strong className="text-[var(--ink-muted)]">.local</strong> não é aceito pelo Mercado Pago.</p>
       </div>
       {!readiness.configured && <div className="cash-notice cash-notice-error"><span><strong>Mercado Pago não está pronto.</strong><br />Configure e teste a integração antes de cobrar.</span><Link href="/configuracoes/integracoes/mercado-pago" className="cash-secondary-button"><ArrowLeft size={16} /> Configurar</Link></div>}
       {error && <div role="alert" className="cash-notice cash-notice-error">{error}</div>}

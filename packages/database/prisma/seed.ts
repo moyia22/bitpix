@@ -269,10 +269,13 @@ async function seed(): Promise<void> {
     update: { planId: defaultPlan.id, status: "ACTIVE" },
   });
 
+  // E-mail Pix da empresa (payer.email padrão). Domínio real — nunca .local, que o
+  // Mercado Pago recusa. Configurável depois em Configurações › Operação.
+  const seedPixPayerEmail = process.env.SEED_PIX_PAYER_EMAIL ?? "pagador@lojamodelo.com.br";
   await prisma.companySetting.upsert({
     where: { companyId: company.id },
-    create: { companyId: company.id },
-    update: {},
+    create: { companyId: company.id, pixPayerEmail: seedPixPayerEmail },
+    update: { pixPayerEmail: seedPixPayerEmail },
   });
 
   await prisma.printTemplate.upsert({

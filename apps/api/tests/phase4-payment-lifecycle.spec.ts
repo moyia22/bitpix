@@ -33,6 +33,7 @@ describe.sequential("Fase 4 — ciclo financeiro confirmado", () => {
     app = await buildApp(); await app.ready();
     const company = await prisma.company.create({ data: { legalName: `Phase 4 ${suffix} Ltda`, displayName: "Loja Fase 4", slug: `phase4-${suffix}` } });
     companyId = company.id; companyIds.push(company.id);
+    await prisma.companySetting.create({ data: { companyId: company.id, pixPayerEmail: "pix@teste.com.br" } });
     const branch = await prisma.branch.create({ data: { companyId, code: "MATRIZ", name: "Matriz" } });
     const role = await prisma.role.create({ data: { companyId, key: "ADMIN_TEST", name: "Administrador de teste" } });
     const keys = ["integrations.read", "integrations.manage", "pix.charge.create", "pix.charge.read", "pix.charge.cancel", "pix.charge.copy", "pix.charge.print", "pix.payment.read", "pix.charge.reconcile", "pix.webhook.read", "pix.webhook.reprocess", "pix.refund.create", "pix.refund.read", "pix.payment.receipt.print", "cash.session.read", "cash.session.close", "cash.session.close.with_pending_charges"] as const;

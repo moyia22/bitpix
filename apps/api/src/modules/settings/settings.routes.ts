@@ -7,6 +7,7 @@ import { AppError } from "../../lib/errors.js";
 import { writeAudit } from "../../lib/audit.js";
 import { authenticate, requirePermission } from "../auth/auth.guard.js";
 import { getPrivateStorage } from "../../lib/storage.js";
+import { isValidPayerEmail } from "../payments/payer-email.js";
 
 const preferenceSchema = z.object({ theme: z.enum(["LIGHT", "DARK", "SYSTEM"]).optional(), paymentSoundEnabled: z.boolean().optional() }).refine((value) => Object.keys(value).length > 0);
 const printSelect = { publicId: true, scopeKey: true, storeName: true, title: true, messageAboveQr: true, messageBelowQr: true, footer: true, paperWidth: true, qrSize: true, alignment: true, showSaleCode: true, showAmount: true, showPixCopyPaste: true, showDate: true, showTime: true, showExpiration: true, showOperator: true, showCashRegister: true, showTransactionId: true, showNonFiscalDisclaimer: true, copies: true, cutSpacingMm: true, autoPrint: true, printAfterConfirmation: true, autoReturnToSale: true, paymentSoundEnabled: true, logoFile: { select: { publicId: true, originalName: true, mimeType: true } } } as const;
@@ -15,13 +16,22 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/settings", { preHandler: requirePermission("settings.read") }, async (request) => {
     const company = await prisma.company.findUniqueOrThrow({ where: { id: request.auth!.companyId }, include: { setting: true } });
     const setting = company.setting ?? await prisma.companySetting.create({ data: { companyId: company.id } });
-    return { data: { displayName: company.displayName, timezone: company.timezone, defaultPixExpirationMinutes: setting.defaultPixExpirationMinutes, confirmBeforePix: setting.confirmBeforePix, blockDuplicateCode: setting.blockDuplicateCode, autoPrint: setting.autoPrint, printAfterConfirmation: setting.printAfterConfirmation, autoReturnToSale: setting.autoReturnToSale, autoReturnSeconds: setting.autoReturnSeconds, blockCloseWithPendingCharges: setting.blockCloseWithPendingCharges, minSaleAmountInCents: setting.minSaleAmount.times(100).toNumber(), maxSaleAmountInCents: setting.maxSaleAmount.times(100).toNumber(), paymentSoundEnabled: true } };
+    return { data: { displayName: company.displayName, timezone: company.timezone, defaultPixExpirationMinutes: setting.defaultPixExpirationMinutes, confirmBeforePix: setting.confirmBeforePix, blockDuplicateCode: setting.blockDuplicateCode, autoPrint: setting.autoPrint, printAfterConfirmation: setting.printAfterConfirmation, autoReturnToSale: setting.autoReturnToSale, autoReturnSeconds: setting.autoReturnSeconds, blockCloseWithPendingCharges: setting.blockCloseWithPendingCharges, minSaleAmountInCents: setting.minSaleAmount.times(100).toNumber(), maxSaleAmountInCents: setting.maxSaleAmount.times(100).toNumber(), pixPayerEmail: setting.pixPayerEmail ?? "", paymentSoundEnabled: true } };
   });
   app.put("/settings", { preHandler: requirePermission("settings.update") }, async (request) => {
     const body = companySettingsSchema.parse(request.body); const companyId = request.auth!.companyId;
+    // Valida o e-mail Pix da empresa antes de salvar: "" limpa; não-vazio deve ser
+    // um e-mail com domínio real (recusa .local e afins).
+    let pixPayerEmail: string | null | undefined;
+    if (body.pixPayerEmail !== undefined) {
+      const trimmed = body.pixPayerEmail.trim();
+      if (trimmed === "") pixPayerEmail = null;
+      else if (isValidPayerEmail(trimmed)) pixPayerEmail = trimmed.toLowerCase();
+      else throw new AppError(400, "PIX_PAYER_EMAIL_INVALID", "E-mail Pix da empresa inválido. Use um e-mail com domínio real (não .local).");
+    }
     await prisma.$transaction(async (tx) => {
       await tx.company.update({ where: { id: companyId }, data: { displayName: body.displayName, timezone: body.timezone } });
-      const setting = { defaultPixExpirationMinutes: body.defaultPixExpirationMinutes, confirmBeforePix: body.confirmBeforePix, blockDuplicateCode: body.blockDuplicateCode, autoPrint: body.autoPrint, printAfterConfirmation: body.printAfterConfirmation, autoReturnToSale: body.autoReturnToSale, autoReturnSeconds: body.autoReturnSeconds, blockCloseWithPendingCharges: body.blockCloseWithPendingCharges, minSaleAmount: new Prisma.Decimal(body.minSaleAmountInCents).div(100), maxSaleAmount: new Prisma.Decimal(body.maxSaleAmountInCents).div(100) };
+      const setting = { defaultPixExpirationMinutes: body.defaultPixExpirationMinutes, confirmBeforePix: body.confirmBeforePix, blockDuplicateCode: body.blockDuplicateCode, autoPrint: body.autoPrint, printAfterConfirmation: body.printAfterConfirmation, autoReturnToSale: body.autoReturnToSale, autoReturnSeconds: body.autoReturnSeconds, blockCloseWithPendingCharges: body.blockCloseWithPendingCharges, minSaleAmount: new Prisma.Decimal(body.minSaleAmountInCents).div(100), maxSaleAmount: new Prisma.Decimal(body.maxSaleAmountInCents).div(100), ...(pixPayerEmail !== undefined ? { pixPayerEmail } : {}) };
       await tx.companySetting.upsert({ where: { companyId }, create: { companyId, ...setting }, update: setting });
       await tx.userPreference.upsert({ where: { userId: request.auth!.userId }, create: { userId: request.auth!.userId, paymentSoundEnabled: body.paymentSoundEnabled }, update: { paymentSoundEnabled: body.paymentSoundEnabled } });
     });

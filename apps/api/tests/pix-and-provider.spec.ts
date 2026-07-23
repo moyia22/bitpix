@@ -23,6 +23,7 @@ describe.sequential("Mercado Pago e cobranças Pix", () => {
     for (const tenant of ["A", "B"] as const) {
       const company = await prisma.company.create({ data: { legalName: `Pix ${tenant} Ltda`, displayName: `Pix ${tenant}`, slug: `pix-${tenant.toLowerCase()}-${suffix}` } });
       companyIds.push(company.id);
+      await prisma.companySetting.create({ data: { companyId: company.id, pixPayerEmail: "pix@teste.com.br" } });
       const branch = await prisma.branch.create({ data: { companyId: company.id, code: "MATRIZ", name: `Matriz ${tenant}` } });
       const role = await prisma.role.create({ data: { companyId: company.id, key: "PIX_TESTER", name: "Operador Pix" } });
       for (const key of ["integrations.read", "integrations.manage", "pix.charge.create", "pix.charge.read", "pix.charge.cancel", "pix.charge.copy", "pix.charge.print"] as const) {

@@ -167,6 +167,9 @@ export const saleDraftSchema = z.object({
 
 export const pixChargeCreateSchema = saleDraftSchema.extend({
   description: z.string().trim().max(240).optional(),
+  // E-mail do cliente/pagador (opcional). A validação de domínio real (recusa .local)
+  // e a resolução com o e-mail da empresa acontecem no backend antes de montar o payload.
+  customerEmail: z.string().trim().max(180).optional(),
 });
 
 export const providerConfigurationSchema = z.object({
@@ -277,6 +280,9 @@ export const companySettingsSchema = z.object({
   minSaleAmountInCents: z.number().int().positive(),
   maxSaleAmountInCents: z.number().int().positive(),
   paymentSoundEnabled: z.boolean(),
+  // E-mail válido da empresa usado como pagador do Pix quando o cliente não informa um.
+  // "" limpa o valor. A validação de domínio real (recusa .local) é feita no backend.
+  pixPayerEmail: z.string().trim().max(180).optional(),
 }).refine((value) => value.maxSaleAmountInCents >= value.minSaleAmountInCents, "O valor máximo deve ser maior que o mínimo");
 
 export const printTemplateSchema = z.object({

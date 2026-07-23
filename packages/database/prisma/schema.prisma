@@ -918,6 +918,7 @@ model CompanySetting {
   minSaleAmount                Decimal  @default(0.01) @db.Decimal(18, 2)
   maxSaleAmount                Decimal  @default(999999999.99) @db.Decimal(18, 2)
   dateFormat                   String   @default("dd/MM/yyyy") @db.VarChar(30)
+  pixPayerEmail                String?  @db.VarChar(180)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
   company                      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)

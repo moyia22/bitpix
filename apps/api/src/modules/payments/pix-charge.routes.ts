@@ -22,6 +22,7 @@ import { moneyFromCents, moneyToString } from "../cash/cash.service.js";
 import { pixChargeDto, pixChargeInclude } from "./pix-charge.service.js";
 import { incrementPaymentMetric } from "./payment-metrics.js";
 import { getPaymentProvider } from "./providers/provider-factory.js";
+import { resolvePayerEmail } from "./payer-email.js";
 import { ProviderError } from "./providers/payment-provider.js";
 import { toPixChargeStatus } from "./providers/status-mapper.js";
 
@@ -68,7 +69,7 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
       throw new AppError(409, "BRANCH_REQUIRED", "Vincule o usuário a uma filial antes de cobrar.");
     }
 
-    const [cashSession, configuration, existing] = await Promise.all([
+    const [cashSession, configuration, existing, companySetting] = await Promise.all([
       prisma.cashSession.findFirst({
         where: { companyId: auth.companyId, branchId: auth.branchId, operatorId: auth.userId, status: CashSessionStatus.OPEN },
         include: { cashRegister: true },
@@ -82,6 +83,7 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
         select: { publicId: true, status: true },
         orderBy: { createdAt: "desc" },
       }),
+      prisma.companySetting.findUnique({ where: { companyId: auth.companyId }, select: { pixPayerEmail: true } }),
     ]);
     if (!cashSession) {
       request.log.warn({ saleCode: body.code, userId: auth.userId }, "[PIX] bloqueado: nenhum caixa aberto para o operador");
@@ -97,6 +99,17 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
       request.log.warn({ saleCode: body.code, existingStatus: existing.status }, "[PIX] bloqueado: cobrança duplicada para o mesmo código");
       await writeAudit({ request, action: "pix.charge.duplicate_blocked", entity: "PixCharge", entityPublicId: existing.publicId, outcome: AuditOutcome.FAILURE, metadata: { saleCode: body.code, existingStatus: existing.status } });
       throw new AppError(409, "PIX_CHARGE_ALREADY_EXISTS", "Este código já possui uma cobrança Pix.", { existingChargePublicId: existing.publicId, status: existing.status });
+    }
+
+    // Resolve o e-mail do pagador ANTES de criar a cobrança/enviar ao MP:
+    // cliente → empresa → bloqueia. Nunca envia *.local (invalid_payer_email).
+    let payerEmail: string;
+    try {
+      payerEmail = resolvePayerEmail({ customerEmail: body.customerEmail, companyEmail: companySetting?.pixPayerEmail });
+    } catch (error) {
+      request.log.warn({ saleCode: body.code, customerEmailDomain: body.customerEmail?.split("@")[1] ?? null, hasCompanyEmail: Boolean(companySetting?.pixPayerEmail) }, "[PIX] bloqueado: sem e-mail de pagador válido (não enviado ao Mercado Pago)");
+      await writeAudit({ request, action: "pix.charge.denied.payer_email", entity: "PixCharge", outcome: AuditOutcome.FAILURE, metadata: { saleCode: body.code } });
+      throw error;
     }
 
     const amount = moneyFromCents(body.amountInCents);
@@ -154,7 +167,7 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
           type: "online", processing_mode: "automatic", currency: "BRL",
           total_amount: moneyToString(amount),
           external_reference: body.code,
-          payer_email_domain: auth.principal.user.email.split("@")[1] ?? null,
+          payer_email_domain: payerEmail.split("@")[1] ?? null,
           expiration: `${configuration.pixExpirationMinutes}min`,
           payment_method: { id: "pix", type: "bank_transfer" },
           has_description: Boolean(body.description),
@@ -165,7 +178,7 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
         amount: moneyToString(amount),
         externalReference: body.code,
         ...(body.description ? { description: body.description } : {}),
-        payerEmail: auth.principal.user.email,
+        payerEmail,
         expirationMinutes: configuration.pixExpirationMinutes,
         idempotencyKey,
         accessToken: decryptCredential(configuration),
