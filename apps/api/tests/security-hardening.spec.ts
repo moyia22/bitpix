@@ -1,28 +1,32 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
+import { totp } from "../src/modules/auth/totp.js";
+import { createTestTenant, enableTestMfa, type TestTenant } from "./helpers/tenant.js";
 
-const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@bitpix.local";
-const adminPassword = process.env.SEED_ADMIN_PASSWORD;
 const foreignOrigin = "https://evil.example.com";
 
-describe("endurecimento de segurança (CSRF/Origin, auth, webhook público)", () => {
+// HERMÉTICO: usa apenas um tenant de teste próprio — nunca as contas reais/seed.
+describe.sequential("endurecimento de segurança (CSRF/Origin, auth, webhook público)", () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
+  let tenant: TestTenant;
   let sessionCookie = "";
 
   beforeAll(async () => {
-    if (!adminPassword) throw new Error("SEED_ADMIN_PASSWORD é obrigatória para os testes de integração");
     app = await buildApp();
     await app.ready();
+    tenant = await createTestTenant("sec-hard");
+    const mfaSecret = await enableTestMfa(tenant.adminId);
     const login = await app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
-      payload: { email: adminEmail, password: adminPassword },
+      payload: { email: tenant.adminEmail, password: tenant.password, mfaCode: totp(mfaSecret) },
     });
     expect(login.statusCode).toBe(200);
     sessionCookie = String(login.headers["set-cookie"]).split(";")[0] ?? "";
   });
 
   afterAll(async () => {
+    await tenant.cleanup();
     await app.close();
   });
 

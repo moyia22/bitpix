@@ -3,27 +3,27 @@ import { prisma } from "@bitpix/database";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { hashSessionToken } from "../src/modules/auth/auth.service.js";
+import { totp } from "../src/modules/auth/totp.js";
+import { createTestTenant, enableTestMfa, type TestTenant } from "./helpers/tenant.js";
 
-const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@bitpix.local";
-const adminPassword = process.env.SEED_ADMIN_PASSWORD;
-
-describe("autenticação e isolamento multiempresa", () => {
+// HERMÉTICO: usa apenas um tenant de teste próprio — nunca as contas reais/seed.
+describe.sequential("autenticação e isolamento multiempresa", () => {
   const foreignSlug = `tenant-isolation-${randomUUID().slice(0, 8)}`;
   let app: Awaited<ReturnType<typeof buildApp>>;
+  let tenant: TestTenant;
+  let mfaSecret = "";
   let sessionCookie = "";
   let foreignUserPublicId = "";
 
   beforeAll(async () => {
-    if (!adminPassword) throw new Error("SEED_ADMIN_PASSWORD é obrigatória para os testes de integração");
     app = await buildApp();
     await app.ready();
+    tenant = await createTestTenant("tenancy");
+    // 2FA ativo no admin de teste → login determinístico com código, em qualquer ambiente.
+    mfaSecret = await enableTestMfa(tenant.adminId);
 
     const foreignCompany = await prisma.company.create({
-      data: {
-        legalName: "Tenant de isolamento Ltda",
-        displayName: "Tenant de isolamento",
-        slug: foreignSlug,
-      },
+      data: { legalName: "Tenant de isolamento Ltda", displayName: "Tenant de isolamento", slug: foreignSlug },
     });
     const foreignUser = await prisma.user.create({
       data: {
@@ -43,6 +43,7 @@ describe("autenticação e isolamento multiempresa", () => {
       await prisma.user.deleteMany({ where: { companyId: company.id } });
       await prisma.company.delete({ where: { id: company.id } });
     }
+    await tenant.cleanup();
     await app.close();
   });
 
@@ -57,17 +58,17 @@ describe("autenticação e isolamento multiempresa", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
-      payload: { email: adminEmail, password: "senha-incorreta" },
+      payload: { email: tenant.adminEmail, password: "senha-incorreta" },
     });
     expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({ error: { code: "AUTH_INVALID" } });
   });
 
-  it("autentica e cria uma sessão HttpOnly revogável", async () => {
+  it("autentica (com 2FA) e cria uma sessão HttpOnly revogável", async () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/auth/login",
-      payload: { email: adminEmail, password: adminPassword },
+      payload: { email: tenant.adminEmail, password: tenant.password, mfaCode: totp(mfaSecret) },
     });
     expect(response.statusCode).toBe(200);
     const setCookie = response.headers["set-cookie"];
@@ -76,7 +77,7 @@ describe("autenticação e isolamento multiempresa", () => {
 
     const me = await app.inject({ method: "GET", url: "/api/v1/auth/me", headers: { cookie: sessionCookie } });
     expect(me.statusCode).toBe(200);
-    expect(me.json()).toMatchObject({ data: { user: { email: adminEmail }, company: { slug: "loja-modelo" } } });
+    expect(me.json()).toMatchObject({ data: { user: { email: tenant.adminEmail }, company: { slug: tenant.companySlug } } });
   });
 
   it("não permite consultar um usuário pertencente a outra empresa", async () => {

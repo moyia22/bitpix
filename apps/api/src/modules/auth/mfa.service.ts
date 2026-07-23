@@ -45,6 +45,13 @@ function readSecret(user: {
 
 export async function beginMfaSetup(request: FastifyRequest, password: string) {
   const user = await authenticatedUser(request);
+  // Segurança: um 2FA ATIVO nunca pode ser desativado ou rotacionado apenas com a
+  // senha. Antes, iniciar um novo setup já gravava mfaEnabled=false e destruía o
+  // segredo atual — quem abandonasse o fluxo ficava sem 2FA. Reconfigurar exige
+  // desativar primeiro (senha + código TOTP) ou reset por um admin com step-up.
+  if (user.mfaEnabled) {
+    throw new AppError(409, "MFA_ALREADY_ENABLED", "O 2FA já está ativo. Desative-o com senha e código antes de configurar um novo autenticador.");
+  }
   if (!await argon2.verify(user.passwordHash, password)) {
     throw new AppError(401, "PASSWORD_INVALID", "Senha atual inválida.");
   }
@@ -53,7 +60,7 @@ export async function beginMfaSetup(request: FastifyRequest, password: string) {
   await prisma.user.update({
     where: { id: user.id },
     data: {
-      mfaEnabled: false,
+      // mfaEnabled permanece como está (false): só o confirm liga o 2FA.
       mfaConfirmedAt: null,
       mfaSecretCiphertext: encrypted.ciphertext,
       mfaSecretIv: encrypted.iv,
