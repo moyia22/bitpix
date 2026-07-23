@@ -4,6 +4,7 @@ import { Activity, CheckCircle2, Clock3, LockKeyhole, Radio } from "lucide-react
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { NewSaleForm } from "@/features/sales/new-sale-form";
+import { SetupChecklist } from "@/features/onboarding/setup-checklist";
 import { landingPathFor } from "@/lib/landing";
 import { apiFetch, requireSession } from "@/lib/server-api";
 
@@ -68,6 +69,8 @@ export default async function NewSalePage() {
           <Radio size={17} /> {readiness.data.configured ? "Mercado Pago pronto" : "Integração pendente"}
         </div>
       </div>
+
+      <SetupChecklist permissions={principal.permissions} readiness={readiness.data} />
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section className="card overflow-hidden" aria-label="Venda Pix">
