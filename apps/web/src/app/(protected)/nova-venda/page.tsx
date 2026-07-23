@@ -42,18 +42,25 @@ export default async function NewSalePage() {
   // página que pode usar, em vez de estourar 403 nas chamadas abaixo.
   const principal = await requireSession();
   if (!principal.permissions.includes("pix.charge.create")) redirect(landingPathFor(principal.permissions));
-  const [activity, cash, readiness] = await Promise.all([
+  const [activity, cash, readiness, effective] = await Promise.all([
     apiFetch<{ data: ActivityItem[] }>("/activity/recent"),
     apiFetch<{ data: CashSessionDto | null }>("/cash-sessions/current"),
     apiFetch<{ data: { configured: boolean; status: string; providerMode: "real" | "mock"; lastVerifiedAt: string | null } }>("/pix/readiness"),
+    // Automações configuradas (impressão automática, retorno pós-pagamento).
+    apiFetch<{ data: { autoPrint: boolean; printAfterConfirmation: boolean; autoReturnToSale: boolean; autoReturnSeconds: number } }>("/settings/effective"),
   ]);
   const currentCash = cash.data;
+  const automation = {
+    autoPrint: effective.data.autoPrint,
+    printAfterConfirmation: effective.data.printAfterConfirmation,
+    autoReturnToSale: effective.data.autoReturnToSale,
+    autoReturnSeconds: effective.data.autoReturnSeconds,
+  };
 
   return (
     <div className="page-container">
       <div className="mb-9 flex flex-wrap items-end justify-between gap-5">
         <div>
-          <span className="dev-badge mb-4"><span className="status-dot" /> Desenvolvimento</span>
           <h1 className="display-title">Nova venda</h1>
           <p className="mt-2 text-[var(--ink-muted)]">Informe o código e o valor para gerar uma cobrança Pix.</p>
         </div>
@@ -86,7 +93,7 @@ export default async function NewSalePage() {
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--primary)]">Cobrança Pix</p>
                 <h2 id="sale-form-title" className="mt-2 font-[var(--font-display)] text-2xl font-semibold tracking-[-0.03em]">Dados essenciais</h2>
               </div>
-              <NewSaleForm currentCash={currentCash} readiness={readiness.data} />
+              <NewSaleForm currentCash={currentCash} readiness={readiness.data} automation={automation} />
             </div>
           </div>
         </section>

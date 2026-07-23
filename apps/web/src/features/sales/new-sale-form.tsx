@@ -17,6 +17,15 @@ interface Readiness {
   lastVerifiedAt: string | null;
 }
 
+// Automações vindas das Configurações (empresa/filial) — antes existiam na tela
+// de configurações mas não tinham efeito algum no fluxo de venda.
+interface Automation {
+  autoPrint: boolean;
+  printAfterConfirmation: boolean;
+  autoReturnToSale: boolean;
+  autoReturnSeconds: number;
+}
+
 const statusLabels: Record<PixChargeDto["status"], string> = {
   CREATING: "Criando cobrança",
   WAITING_PAYMENT: "Aguardando pagamento",
@@ -37,11 +46,12 @@ async function parseError(response: Response): Promise<{ message: string; detail
   return { message: body.error?.message ?? "Não foi possível concluir a operação.", ...(details ? { details } : {}) };
 }
 
-export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessionDto | null; readiness: Readiness }) {
+export function NewSaleForm({ currentCash, readiness, automation }: { currentCash: CashSessionDto | null; readiness: Readiness; automation: Automation }) {
   const codeRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [emailOpen, setEmailOpen] = useState(false);
   const [amountInCents, setAmountInCents] = useState(0);
   const [charge, setCharge] = useState<PixChargeDto | null>(null);
   const [error, setError] = useState("");
@@ -133,6 +143,8 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
       }
       const body = await response.json() as { data: PixChargeDto };
       setCharge(body.data);
+      // Automação: imprime o QR da cobrança assim que ela é criada.
+      if (automation.autoPrint) window.setTimeout(() => void printChargeFor(body.data), 400);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Não foi possível gerar o Pix.");
     } finally { setSubmitting(false); }
@@ -153,18 +165,18 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
     const body = await response.json() as { data: PixChargeDto }; setCharge(body.data);
   };
 
-  const printCharge = async () => {
-    if (!charge) return;
-    const response = await fetch(`${apiUrl}/api/v1/pix/charges/${charge.publicId}/print`, {
+  const printChargeFor = useCallback(async (target: PixChargeDto) => {
+    const response = await fetch(`${apiUrl}/api/v1/pix/charges/${target.publicId}/print`, {
       method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ paperWidth }),
     });
     if (!response.ok) { setError((await parseError(response)).message); return; }
     document.documentElement.dataset.receiptWidth = paperWidth;
     setPrintOpen(false);
     window.setTimeout(() => window.print(), 80);
-  };
+  }, [paperWidth]);
+  const printCharge = async () => { if (charge) await printChargeFor(charge); };
 
-  const printPaymentReceipt = async () => {
+  const printPaymentReceipt = useCallback(async () => {
     if (!charge?.paymentPublicId) return;
     const response = await fetch(`${apiUrl}/api/v1/pix/payments/${charge.paymentPublicId}/receipt`, { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({ paperWidth }) });
     if (!response.ok) { setError((await parseError(response)).message); return; }
@@ -175,9 +187,26 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
     setPrintOpen(false);
     window.setTimeout(() => window.print(), 80);
     return body.data.receipt;
-  };
+  }, [charge, paperWidth]);
 
-  const newSale = () => { setCharge(null); setCode(""); setCustomerEmail(""); setAmountInCents(0); setError(""); setConnectionState("idle"); window.setTimeout(() => codeRef.current?.focus(), 0); };
+  const newSale = useCallback(() => { setCharge(null); setCode(""); setCustomerEmail(""); setEmailOpen(false); setAmountInCents(0); setError(""); setConnectionState("idle"); window.setTimeout(() => codeRef.current?.focus(), 0); }, []);
+
+  // ---- Automações das Configurações ----
+  // Imprimir comprovante automaticamente quando o pagamento confirma.
+  const receiptPrintedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!automation.printAfterConfirmation || !charge || charge.status !== "PAID" || !charge.paymentPublicId) return;
+    if (receiptPrintedRef.current === charge.publicId) return;
+    receiptPrintedRef.current = charge.publicId;
+    void printPaymentReceipt();
+  }, [automation.printAfterConfirmation, charge, printPaymentReceipt]);
+
+  // Voltar sozinho para uma nova venda alguns segundos após o pagamento.
+  useEffect(() => {
+    if (!automation.autoReturnToSale || !charge || charge.status !== "PAID") return;
+    const timer = window.setTimeout(newSale, Math.max(1, automation.autoReturnSeconds) * 1_000);
+    return () => window.clearTimeout(timer);
+  }, [automation.autoReturnToSale, automation.autoReturnSeconds, charge, newSale]);
   const remainingSeconds = charge && clock > 0 ? Math.max(0, Math.floor((new Date(charge.expiresAt).getTime() - clock) / 1_000)) : 0;
   const remaining = `${String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:${String(remainingSeconds % 60).padStart(2, "0")}`;
   const trackingComplete = Boolean(charge && ["PAID", "EXPIRED", "CANCELLED", "FAILED", "REFUNDED"].includes(charge.status));
@@ -286,9 +315,18 @@ export function NewSaleForm({ currentCash, readiness }: { currentCash: CashSessi
         <p className="mt-2 text-sm text-[var(--ink-faint)]">Toque nos números ou use os atalhos. Os dois últimos dígitos são os centavos — <strong className="text-[var(--ink-muted)]">1250</strong> vira <strong className="text-[var(--ink-muted)]">R$ 12,50</strong>.</p>
       </div>
       <div>
-        <label className="field-label" htmlFor="customer-email">E-mail do cliente <span className="font-normal text-[var(--ink-faint)]">(opcional)</span></label>
-        <input className="field-input" id="customer-email" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} autoComplete="off" maxLength={180} placeholder="cliente@email.com" />
-        <p className="mt-2 text-sm text-[var(--ink-faint)]">Se vazio, usamos o e-mail Pix da empresa. Domínio <strong className="text-[var(--ink-muted)]">.local</strong> não é aceito pelo Mercado Pago.</p>
+        {!emailOpen ? (
+          <button type="button" className="amount-clear" onClick={() => setEmailOpen(true)}>+ E-mail do cliente (opcional)</button>
+        ) : (
+          <>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="field-label mb-0" htmlFor="customer-email">E-mail do cliente <span className="font-normal text-[var(--ink-faint)]">(opcional)</span></label>
+              <button type="button" className="amount-clear" onClick={() => { setEmailOpen(false); setCustomerEmail(""); }}><X size={14} /> Remover</button>
+            </div>
+            <input className="field-input" id="customer-email" type="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} autoComplete="off" maxLength={180} placeholder="cliente@email.com" autoFocus />
+            <p className="mt-2 text-sm text-[var(--ink-faint)]">Se vazio, usamos o e-mail Pix configurado da empresa.</p>
+          </>
+        )}
       </div>
       {!readiness.configured && <div className="cash-notice cash-notice-error"><span><strong>Mercado Pago não está pronto.</strong><br />Configure e teste a integração antes de cobrar.</span><Link href="/configuracoes/integracoes/mercado-pago" className="cash-secondary-button"><ArrowLeft size={16} /> Configurar</Link></div>}
       {error && <div role="alert" className="cash-notice cash-notice-error">{error}</div>}

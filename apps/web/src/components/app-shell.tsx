@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BrandMark } from "./brand-mark";
 import { LogoutButton } from "./logout-button";
 import { ThemeToggle } from "./theme-toggle";
@@ -91,8 +91,31 @@ function NavigationGroup({
   );
 }
 
+const healthUrl = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333"}/health/live`;
+
+// Indicador honesto de conectividade: antes o texto "API conectada" era fixo.
+function useApiHealth(): boolean {
+  const [healthy, setHealthy] = useState(true);
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      try {
+        const response = await fetch(healthUrl, { cache: "no-store" });
+        if (active) setHealthy(response.ok);
+      } catch {
+        if (active) setHealthy(false);
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 30_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+  return healthy;
+}
+
 export function AppShell({ principal, currentCash, children }: { principal: SessionPrincipal; currentCash: CashSessionDto | null; children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const apiHealthy = useApiHealth();
   const permissions = new Set(principal.permissions);
   const initials = principal.user.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 
@@ -148,8 +171,8 @@ export function AppShell({ principal, currentCash, children }: { principal: Sess
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden items-center gap-2 text-sm font-semibold text-[var(--success)] md:flex">
-              <Activity size={17} aria-hidden="true" /> API conectada
+            <span className={`hidden items-center gap-2 text-sm font-semibold md:flex ${apiHealthy ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
+              <Activity size={17} aria-hidden="true" /> {apiHealthy ? "API conectada" : "API instável"}
             </span>
             <ThemeToggle />
             <span className="hidden text-sm font-semibold sm:inline">{principal.user.name.split(" ")[0]}</span>

@@ -42,7 +42,6 @@ export default async function CashPage() {
     <div className="page-container">
       <div className="cash-page-heading">
         <div>
-          <span className="dev-badge mb-4"><span className="status-dot" /> Desenvolvimento</span>
           <h1 className="display-title">Controle de caixa</h1>
           <p>Abra, movimente e feche o turno com valores calculados no servidor.</p>
         </div>

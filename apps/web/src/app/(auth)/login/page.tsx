@@ -44,7 +44,6 @@ export default function LoginPage() {
       <section className="flex items-center justify-center bg-transparent px-5 py-12 sm:px-10">
         <div className="w-full max-w-[430px]" style={{ animation: "reveal-up 0.5s var(--ease-out) 0.1s both" }}>
           <div className="mb-12 lg:hidden"><BrandMark /></div>
-          <span className="dev-badge mb-7"><span className="status-dot" /> Ambiente de desenvolvimento</span>
           <h2 className="display-title">Bem-vindo de volta</h2>
           <p className="mt-3 text-[var(--ink-muted)]">Entre com sua conta para acessar o caixa da loja.</p>
           <LoginForm />
