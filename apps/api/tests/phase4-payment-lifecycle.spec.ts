@@ -115,6 +115,32 @@ describe.sequential("Fase 4 — ciclo financeiro confirmado", () => {
     expect(charge.status).toBe("PAID"); expect(charge.sale.status).toBe("PAID");
   });
 
+  it("estorno: atendente solicita, gera notificação e admin nega sem tocar no provedor", async () => {
+    const payment = await prisma.pixPayment.findFirstOrThrow({ where: { companyId } });
+    const requested = await app.inject({ method: "POST", url: `/api/v1/pix/payments/${payment.publicId}/refund-requests`, headers: { cookie }, payload: { reason: "Cliente pagou em duplicidade" } });
+    expect(requested.statusCode).toBe(201);
+    const refundPublicId = requested.json().data.publicId as string;
+    expect(requested.json().data.status).toBe("REQUESTED");
+
+    // Notificação chega para o admin decidir.
+    const notice = await prisma.notification.findFirstOrThrow({ where: { companyId, entityType: "PixRefund", entityPublicId: refundPublicId } });
+    expect(notice.type).toBe("REFUND_REQUESTED");
+    expect(notice.status).toBe("OPEN");
+
+    // Solicitação duplicada é bloqueada.
+    const duplicate = await app.inject({ method: "POST", url: `/api/v1/pix/payments/${payment.publicId}/refund-requests`, headers: { cookie }, payload: { reason: "Outra tentativa qualquer" } });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json().error.code).toBe("REFUND_ALREADY_EXISTS");
+
+    // Admin nega: cancela sem chamar o provedor e resolve a notificação.
+    const denied = await app.inject({ method: "POST", url: `/api/v1/pix/refunds/${refundPublicId}/deny`, headers: { cookie }, payload: { note: "Sem comprovação" } });
+    expect(denied.statusCode).toBe(200);
+    expect(denied.json().data.status).toBe("CANCELLED");
+    expect(await prisma.cashMovement.count({ where: { companyId, type: "PIX_REFUND" } })).toBe(0);
+    expect((await prisma.notification.findFirstOrThrow({ where: { entityPublicId: refundPublicId } })).status).toBe("RESOLVED");
+    // Como foi negado, o pagamento volta a aceitar novo estorno (validado no teste seguinte).
+  });
+
   it("não deixa evento antigo rebaixar uma cobrança paga", async () => {
     setMockProviderOrderState(providerOrderId, { status: "waiting_payment", statusDetail: "pending", providerUpdatedAt: new Date(Date.now() - 60_000) });
     const response = await app.inject({ method: "POST", url: `/api/v1/pix/charges/${chargePublicId}/reconcile`, headers: { cookie } });

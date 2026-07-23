@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { pixChargeHistoryQuerySchema, pixRefundCreateSchema, printPixChargeSchema } from "@bitpix/contracts";
+import { pixChargeHistoryQuerySchema, pixRefundCreateSchema, pixRefundDenySchema, pixRefundRequestSchema, printPixChargeSchema } from "@bitpix/contracts";
 import {
   AuditOutcome,
+  NotificationType,
   PixRefundStatus,
   PrintJobStatus,
   PrintJobType,
@@ -42,6 +43,7 @@ export async function paymentOperationsRoutes(app: FastifyInstance): Promise<voi
     const where: Prisma.PixChargeWhereInput = {
       companyId,
       ...(query.status ? { status: query.status } : {}),
+      ...(query.operator ? { sale: { operator: { publicId: query.operator } } } : {}),
       ...(query.from || query.to ? { createdAt: { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lte: new Date(query.to) } : {}) } } : {}),
       ...(query.search ? { OR: [
         ...(isUuid(query.search) ? [{ publicId: query.search }] : []),
@@ -79,9 +81,9 @@ export async function paymentOperationsRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.get<{ Params: { publicId: string } }>("/pix/charges/:publicId/details", { preHandler: requirePermission("pix.charge.read") }, async (request) => {
-    const charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId }, include: { sale: { include: { operator: { select: { publicId: true, name: true } } } }, cashSession: { include: { cashRegister: { select: { publicId: true, code: true, name: true } } } }, statusHistory: { orderBy: { createdAt: "asc" } }, printJobs: { select: { publicId: true, type: true, paperWidth: true, status: true, createdAt: true } }, webhookEvents: { select: { publicId: true, status: true, signatureStatus: true, processingError: true, receivedAt: true, processedAt: true }, orderBy: { receivedAt: "desc" }, take: 20 }, payment: { include: { refunds: { orderBy: { createdAt: "desc" } } } } } });
+    const charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId }, include: { sale: { include: { operator: { select: { publicId: true, name: true } } } }, cashSession: { include: { cashRegister: { select: { publicId: true, code: true, name: true } } } }, statusHistory: { orderBy: { createdAt: "asc" } }, printJobs: { select: { publicId: true, type: true, paperWidth: true, status: true, createdAt: true } }, webhookEvents: { select: { publicId: true, status: true, signatureStatus: true, processingError: true, receivedAt: true, processedAt: true }, orderBy: { receivedAt: "desc" }, take: 20 }, payment: { include: { refunds: { orderBy: { createdAt: "desc" }, include: { requestedBy: { select: { name: true } } } } } } } });
     if (!charge) throw new AppError(404, "PIX_CHARGE_NOT_FOUND", "Cobrança Pix não encontrada.");
-    return { data: { publicId: charge.publicId, saleCode: charge.sale.saleCode, description: charge.sale.description, amount: charge.amount.toFixed(2), receivedAmount: charge.receivedAmount?.toFixed(2) ?? null, status: charge.status, createdAt: charge.createdAt.toISOString(), expiresAt: charge.expiresAt.toISOString(), paidAt: charge.paidAt?.toISOString() ?? null, providerOrderIdMasked: mask(charge.providerOrderId), providerPaymentIdMasked: mask(charge.providerPaymentId), operator: charge.sale.operator, cashRegister: charge.cashSession.cashRegister, history: charge.statusHistory.map((item) => ({ status: item.status, previousStatus: item.previousStatus, source: item.source, reason: item.reason, createdAt: item.createdAt.toISOString() })), prints: charge.printJobs.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })), webhooks: charge.webhookEvents.map((item) => ({ ...item, receivedAt: item.receivedAt.toISOString(), processedAt: item.processedAt?.toISOString() ?? null })), payment: charge.payment ? { publicId: charge.payment.publicId, amount: charge.payment.amount.toFixed(2), status: charge.payment.status, paidAt: charge.payment.paidAt.toISOString(), providerPaymentIdMasked: mask(charge.payment.providerPaymentId), refunds: charge.payment.refunds.map((refund) => ({ publicId: refund.publicId, amount: refund.amount.toFixed(2), status: refund.status, requestedAt: refund.requestedAt.toISOString(), processedAt: refund.processedAt?.toISOString() ?? null })) } : null } };
+    return { data: { publicId: charge.publicId, saleCode: charge.sale.saleCode, description: charge.sale.description, amount: charge.amount.toFixed(2), receivedAmount: charge.receivedAmount?.toFixed(2) ?? null, status: charge.status, createdAt: charge.createdAt.toISOString(), expiresAt: charge.expiresAt.toISOString(), paidAt: charge.paidAt?.toISOString() ?? null, providerOrderIdMasked: mask(charge.providerOrderId), providerPaymentIdMasked: mask(charge.providerPaymentId), operator: charge.sale.operator, cashRegister: charge.cashSession.cashRegister, history: charge.statusHistory.map((item) => ({ status: item.status, previousStatus: item.previousStatus, source: item.source, reason: item.reason, createdAt: item.createdAt.toISOString() })), prints: charge.printJobs.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })), webhooks: charge.webhookEvents.map((item) => ({ ...item, receivedAt: item.receivedAt.toISOString(), processedAt: item.processedAt?.toISOString() ?? null })), payment: charge.payment ? { publicId: charge.payment.publicId, amount: charge.payment.amount.toFixed(2), status: charge.payment.status, paidAt: charge.payment.paidAt.toISOString(), providerPaymentIdMasked: mask(charge.payment.providerPaymentId), refunds: charge.payment.refunds.map((refund) => ({ publicId: refund.publicId, amount: refund.amount.toFixed(2), status: refund.status, reason: refund.reason, requestedBy: refund.requestedBy.name, requestedAt: refund.requestedAt.toISOString(), processedAt: refund.processedAt?.toISOString() ?? null })) } : null } };
   });
 
   app.post<{ Params: { publicId: string } }>("/pix/charges/:publicId/reconcile", { preHandler: requirePermission("pix.charge.reconcile") }, async (request) => {
@@ -145,6 +147,58 @@ export async function paymentOperationsRoutes(app: FastifyInstance): Promise<voi
     await prisma.pixRefund.update({ where: { id: refund.id }, data: { status: PixRefundStatus.PROCESSING, providerRefundId: result.providerRefundId, providerResponseSanitized: result.snapshot.sanitizedResponse as Prisma.InputJsonValue } });
     await new MercadoPagoWebhookProcessor().reconcileCharge(payment.pixCharge.publicId, payment.companyId, request.correlationId, request.auth!.userId);
     return { data: await prisma.pixRefund.findUniqueOrThrow({ where: { id: refund.id }, select: { publicId: true, status: true, processedAt: true } }) };
+  });
+
+  // ---- Fluxo de solicitação de estorno (atendente pede → admin decide) ----
+  // Solicitar: qualquer usuário que enxerga cobranças pode pedir; nada é
+  // executado no provedor — o pedido fica REQUESTED aguardando o admin.
+  app.post<{ Params: { publicId: string } }>("/pix/payments/:publicId/refund-requests", { preHandler: requirePermission("pix.charge.read") }, async (request, reply) => {
+    const body = pixRefundRequestSchema.parse(request.body);
+    const auth = request.auth!;
+    const payment = await prisma.pixPayment.findFirst({ where: { publicId: request.params.publicId, companyId: auth.companyId }, include: { pixCharge: { include: { sale: { select: { saleCode: true } } } } } });
+    if (!payment) throw new AppError(404, "PIX_PAYMENT_NOT_FOUND", "Pagamento Pix não encontrado.");
+    const active = await prisma.pixRefund.findFirst({ where: { pixPaymentId: payment.id, status: { in: [PixRefundStatus.REQUESTED, PixRefundStatus.PROCESSING, PixRefundStatus.PROCESSED] } }, select: { publicId: true, status: true } });
+    if (active) throw new AppError(409, "REFUND_ALREADY_EXISTS", "Já existe um estorno solicitado ou executado para este pagamento.", { refundPublicId: active.publicId, status: active.status });
+    const refund = await prisma.$transaction(async (tx) => {
+      const created = await tx.pixRefund.create({ data: { companyId: auth.companyId, pixPaymentId: payment.id, amount: payment.amount, status: PixRefundStatus.REQUESTED, requestedByUserId: auth.userId, reason: body.reason, idempotencyKey: randomUUID() } });
+      await tx.notification.create({ data: { companyId: auth.companyId, branchId: payment.pixCharge.branchId, type: NotificationType.REFUND_REQUESTED, title: "Estorno aguardando aprovação", message: `${auth.principal.user.name} solicitou estorno de R$ ${payment.amount.toFixed(2)} da venda ${payment.pixCharge.sale.saleCode}.`.slice(0, 300), entityType: "PixRefund", entityPublicId: created.publicId, metadata: { chargePublicId: payment.pixCharge.publicId, reason: body.reason } } });
+      await writeAudit({ request, client: tx, action: "pix.refund.request_created", entity: "PixRefund", entityPublicId: created.publicId, metadata: { paymentPublicId: payment.publicId, amount: payment.amount.toFixed(2), reason: body.reason } });
+      return created;
+    });
+    return reply.status(201).send({ data: { publicId: refund.publicId, status: refund.status } });
+  });
+
+  // Aprovar: executa o estorno no Mercado Pago (só admin com pix.refund.create).
+  app.post<{ Params: { publicId: string } }>("/pix/refunds/:publicId/approve", { preHandler: requirePermission("pix.refund.create") }, async (request) => {
+    const auth = request.auth!;
+    const refund = await prisma.pixRefund.findFirst({ where: { publicId: request.params.publicId, companyId: auth.companyId }, include: { pixPayment: { include: { pixCharge: { include: { providerConfiguration: true } } } } } });
+    if (!refund) throw new AppError(404, "PIX_REFUND_NOT_FOUND", "Solicitação de estorno não encontrada.");
+    if (refund.status !== PixRefundStatus.REQUESTED) throw new AppError(409, "REFUND_NOT_PENDING", "Esta solicitação já foi decidida ou processada.");
+    if (!refund.pixPayment.providerOrderId) throw new AppError(409, "REFUND_NOT_POSSIBLE", "Pagamento sem identificador no provedor.");
+    const fullRefund = refund.amount.equals(refund.pixPayment.amount);
+    const result = await getPaymentProvider().refundPixPayment({ providerOrderId: refund.pixPayment.providerOrderId, ...(fullRefund ? {} : { amount: refund.amount.toFixed(2) }), idempotencyKey: refund.idempotencyKey, accessToken: decryptCredential(refund.pixPayment.pixCharge.providerConfiguration) });
+    await prisma.$transaction(async (tx) => {
+      await tx.pixRefund.update({ where: { id: refund.id }, data: { status: PixRefundStatus.PROCESSING, providerRefundId: result.providerRefundId, providerResponseSanitized: result.snapshot.sanitizedResponse as Prisma.InputJsonValue } });
+      await tx.notification.updateMany({ where: { companyId: auth.companyId, entityType: "PixRefund", entityPublicId: refund.publicId }, data: { status: "RESOLVED", resolvedAt: new Date() } });
+      await writeAudit({ request, client: tx, action: "pix.refund.approved", entity: "PixRefund", entityPublicId: refund.publicId, metadata: { amount: refund.amount.toFixed(2), providerRefundId: result.providerRefundId } });
+    });
+    await new MercadoPagoWebhookProcessor().reconcileCharge(refund.pixPayment.pixCharge.publicId, auth.companyId, request.correlationId, auth.userId);
+    return { data: await prisma.pixRefund.findUniqueOrThrow({ where: { id: refund.id }, select: { publicId: true, status: true, processedAt: true } }) };
+  });
+
+  // Negar: cancela a solicitação sem tocar no provedor (auditado).
+  app.post<{ Params: { publicId: string } }>("/pix/refunds/:publicId/deny", { preHandler: requirePermission("pix.refund.create") }, async (request) => {
+    const body = pixRefundDenySchema.parse(request.body ?? {});
+    const auth = request.auth!;
+    const refund = await prisma.pixRefund.findFirst({ where: { publicId: request.params.publicId, companyId: auth.companyId }, select: { id: true, publicId: true, status: true } });
+    if (!refund) throw new AppError(404, "PIX_REFUND_NOT_FOUND", "Solicitação de estorno não encontrada.");
+    if (refund.status !== PixRefundStatus.REQUESTED) throw new AppError(409, "REFUND_NOT_PENDING", "Esta solicitação já foi decidida ou processada.");
+    await prisma.$transaction(async (tx) => {
+      await tx.pixRefund.update({ where: { id: refund.id }, data: { status: PixRefundStatus.CANCELLED } });
+      await tx.notification.updateMany({ where: { companyId: auth.companyId, entityType: "PixRefund", entityPublicId: refund.publicId }, data: { status: "RESOLVED", resolvedAt: new Date() } });
+      await writeAudit({ request, client: tx, action: "pix.refund.denied", entity: "PixRefund", entityPublicId: refund.publicId, metadata: { note: body.note ?? null } });
+    });
+    return { data: { publicId: refund.publicId, status: PixRefundStatus.CANCELLED } };
   });
 
   app.get<{ Params: { publicId: string } }>("/pix/refunds/:publicId", { preHandler: requirePermission("pix.refund.read") }, async (request) => {

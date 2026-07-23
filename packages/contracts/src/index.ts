@@ -233,6 +233,17 @@ export const pixChargeHistoryQuerySchema = paginationSchema.extend({
   status: z.enum(["CREATING", "WAITING_PAYMENT", "PROCESSING", "PAID", "EXPIRED", "CANCELLED", "REFUNDED", "PARTIALLY_REFUNDED", "FAILED", "VALUE_MISMATCH", "UNDER_REVIEW"]).optional(),
   from: z.iso.datetime().optional(),
   to: z.iso.datetime().optional(),
+  // Filtro por atendente (gestão admin): publicId do operador da venda.
+  operator: z.uuid().optional(),
+});
+
+// Solicitação de estorno feita pelo atendente (a execução fica com o admin).
+export const pixRefundRequestSchema = z.object({
+  reason: z.string().trim().min(8, "Descreva o motivo do estorno").max(240),
+});
+
+export const pixRefundDenySchema = z.object({
+  note: z.string().trim().max(240).optional(),
 });
 
 const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -319,6 +330,8 @@ export const planSchema = z.object({
 
 export const cashSessionListQuerySchema = paginationSchema.extend({
   status: z.enum(["OPEN", "CLOSED"]).optional(),
+  // Filtro por atendente (gestão admin): publicId do operador da sessão.
+  operator: z.uuid().optional(),
 });
 
 export type CashMovementTypeDto =

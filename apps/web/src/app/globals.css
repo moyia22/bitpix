@@ -1210,6 +1210,32 @@ a {
 .pix-paid-icon::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; border: 2px solid color-mix(in srgb, var(--success) 60%, transparent); animation: burst-ring 0.85s var(--ease-out) 0.65s both; pointer-events: none; }
 @keyframes burst-ring { from { transform: scale(0.7); opacity: 1; } to { transform: scale(1.9); opacity: 0; } }
 
+/* Caixa: visão da equipe (gestão admin). */
+.team-cash { margin-bottom: 22px; }
+.team-cash-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.team-cash-head h2 { margin: 4px 0 0; font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; letter-spacing: -0.02em; }
+.team-cash-total { font-size: 0.86rem; color: var(--ink-muted); font-weight: 600; }
+.team-cash-total strong { display: block; font-size: 1.2rem; color: var(--success); }
+.team-cash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+.team-cash-card { border: 1px solid var(--border); border-radius: 16px; padding: 16px; background: var(--surface-subtle); transition: transform 0.2s var(--ease-out), box-shadow 0.24s var(--ease-out), border-color 0.2s ease; }
+.team-cash-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: color-mix(in srgb, var(--primary) 26%, var(--border)); }
+.team-cash-op { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.team-cash-op small { display: block; color: var(--ink-faint); font-size: 0.78rem; }
+.team-cash-avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--primary-soft); color: var(--primary-strong); font-weight: 800; font-size: 0.82rem; }
+.team-cash-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 0; }
+.team-cash-stats dt { font-size: 0.72rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.team-cash-stats dd { margin: 2px 0 0; font-weight: 700; font-size: 0.98rem; }
+
+/* Estorno: lista de solicitações e formulário de motivo. */
+.refund-section { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 8px; }
+.refund-list { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 0; padding: 0; list-style: none; }
+.refund-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface-subtle); animation: reveal-up 0.3s var(--ease-out) both; }
+.refund-list li p { margin: 3px 0 2px; font-size: 0.86rem; color: var(--ink-muted); }
+.refund-list li small { color: var(--ink-faint); }
+.refund-decide { display: flex; gap: 8px; }
+.refund-decide button { width: auto; padding: 8px 14px; }
+.refund-form textarea { resize: vertical; }
+
 /* Comprovante visível no site (preview estilo cupom). */
 .receipt-preview { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 4px; border: 1.5px dashed var(--border-strong); border-radius: 14px; padding: 18px 16px; text-align: center; background: var(--surface-subtle); animation: reveal-up 0.35s var(--ease-out) both; }
 .receipt-preview h4 { margin: 0; font-family: var(--font-display); font-size: 1.05rem; font-weight: 700; }

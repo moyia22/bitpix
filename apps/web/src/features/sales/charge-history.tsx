@@ -1,7 +1,7 @@
 "use client";
 
 import type { PaginatedDto, PixChargeHistoryItemDto, PixChargeStatusDto } from "@bitpix/contracts";
-import { Eye, Printer, RefreshCw, Search, X } from "lucide-react";
+import { Eye, Printer, RefreshCw, Search, Undo2, X } from "lucide-react";
 import Image from "next/image";
 import { useState, type FormEvent } from "react";
 import { PrintReceipt } from "@/components/print-receipt";
@@ -15,7 +15,7 @@ interface Detail {
   publicId: string; saleCode: string; description: string | null; amount: string; receivedAmount: string | null; status: PixChargeStatusDto; createdAt: string; expiresAt: string; paidAt: string | null;
   providerOrderIdMasked: string | null; providerPaymentIdMasked: string | null; operator: { name: string }; cashRegister: { code: string; name: string };
   history: Array<{ status: PixChargeStatusDto; previousStatus: PixChargeStatusDto | null; source: string; reason: string | null; createdAt: string }>;
-  payment: { publicId: string; status: string } | null;
+  payment: { publicId: string; status: string; refunds: Array<{ publicId: string; amount: string; status: string; reason: string; requestedBy: string; requestedAt: string; processedAt: string | null }> } | null;
   webhooks: Array<{ publicId: string; status: string; signatureStatus: string; processingError: string | null; receivedAt: string }>;
 }
 
@@ -37,10 +37,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function ChargeHistory({ initial, canReconcile }: { initial: PaginatedDto<PixChargeHistoryItemDto>; canReconcile: boolean }) {
+const refundLabels: Record<string, string> = { REQUESTED: "Aguardando aprovação", PROCESSING: "Processando no provedor", PROCESSED: "Estornado", FAILED: "Falhou", CANCELLED: "Negado" };
+
+export function ChargeHistory({ initial, canReconcile, canRefund, operators }: { initial: PaginatedDto<PixChargeHistoryItemDto>; canReconcile: boolean; canRefund: boolean; operators: Array<{ publicId: string; name: string }> }) {
   const [result, setResult] = useState(initial);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [operatorFilter, setOperatorFilter] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refundFormOpen, setRefundFormOpen] = useState(false);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -49,12 +54,31 @@ export function ChargeHistory({ initial, canReconcile }: { initial: PaginatedDto
 
   const load = async (page = 1) => {
     setBusy(true); setError("");
-    try { setResult(await request<PaginatedDto<PixChargeHistoryItemDto>>(`/pix/charges?page=${page}&pageSize=20&search=${encodeURIComponent(search)}${status ? `&status=${status}` : ""}`)); }
+    try { setResult(await request<PaginatedDto<PixChargeHistoryItemDto>>(`/pix/charges?page=${page}&pageSize=20&search=${encodeURIComponent(search)}${status ? `&status=${status}` : ""}${operatorFilter ? `&operator=${operatorFilter}` : ""}`)); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao consultar."); }
     finally { setBusy(false); }
   };
   const submit = (event: FormEvent) => { event.preventDefault(); void load(1); };
-  const openDetail = async (publicId: string) => { setBusy(true); setReceiptView(null); try { const body = await request<{ data: Detail }>(`/pix/charges/${publicId}/details`); setDetail(body.data); } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao abrir cobrança."); } finally { setBusy(false); } };
+  const openDetail = async (publicId: string) => { setBusy(true); setReceiptView(null); setRefundFormOpen(false); try { const body = await request<{ data: Detail }>(`/pix/charges/${publicId}/details`); setDetail(body.data); } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao abrir cobrança."); } finally { setBusy(false); } };
+  // Fluxo de estorno: atendente solicita; admin aprova (executa no MP) ou nega.
+  const requestRefund = async () => {
+    if (!detail?.payment || refundReason.trim().length < 8) { setError("Descreva o motivo do estorno (mínimo 8 caracteres)."); return; }
+    setBusy(true); setError("");
+    try {
+      await request(`/pix/payments/${detail.payment.publicId}/refund-requests`, { method: "POST", body: JSON.stringify({ reason: refundReason.trim() }) });
+      setRefundReason(""); setRefundFormOpen(false);
+      await openDetail(detail.publicId);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao solicitar o estorno."); } finally { setBusy(false); }
+  };
+  const decideRefund = async (refundPublicId: string, action: "approve" | "deny") => {
+    if (!detail) return;
+    setBusy(true); setError("");
+    try {
+      await request(`/pix/refunds/${refundPublicId}/${action}`, { method: "POST", body: JSON.stringify({}) });
+      await openDetail(detail.publicId);
+      await load(result.pagination.page);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao decidir o estorno."); } finally { setBusy(false); }
+  };
   // Comprovante visível direto no site (sem precisar imprimir).
   const viewReceipt = async () => {
     if (!detail?.payment) return;
@@ -81,7 +105,7 @@ export function ChargeHistory({ initial, canReconcile }: { initial: PaginatedDto
   };
 
   return <div className="space-y-5">
-    <form className="card history-filters" onSubmit={submit}><div><label className="field-label" htmlFor="history-search">Buscar</label><div className="history-search"><Search size={17} /><input id="history-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Código, cobrança ou transação" /></div></div><div><label className="field-label" htmlFor="history-status">Status</label><select id="history-status" className="field-input" value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Todos</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div><button className="primary-button" disabled={busy}><Search size={17} /> Consultar</button></form>
+    <form className="card history-filters" onSubmit={submit}><div><label className="field-label" htmlFor="history-search">Buscar</label><div className="history-search"><Search size={17} /><input id="history-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Código, cobrança ou transação" /></div></div><div><label className="field-label" htmlFor="history-status">Status</label><select id="history-status" className="field-input" value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Todos</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>{operators.length > 0 && <div><label className="field-label" htmlFor="history-operator">Atendente</label><select id="history-operator" className="field-input" value={operatorFilter} onChange={(event) => setOperatorFilter(event.target.value)}><option value="">Geral (todos)</option>{operators.map((operator) => <option key={operator.publicId} value={operator.publicId}>{operator.name}</option>)}</select></div>}<button className="primary-button" disabled={busy}><Search size={17} /> Consultar</button></form>
     {error && <div className="cash-notice cash-notice-error" role="alert">{error}</div>}
     <section className="card cash-movements"><div className="cash-table-wrap"><table><thead><tr><th>Código</th><th>Data</th><th>Status</th><th>Operador / Caixa</th><th>ID Mercado Pago</th><th className="cash-value-column">Valor</th><th>Ações</th></tr></thead><tbody>{result.data.map((item) => <tr key={item.publicId}><td><strong>{item.saleCode}</strong></td><td>{dateTime.format(new Date(item.createdAt))}</td><td><span className={`pix-status pix-status-${item.status.toLowerCase()}`}>{labels[item.status]}</span></td><td>{item.operator}<small>{item.cashRegister}</small></td><td>{item.providerPaymentIdMasked ?? "—"}</td><td className="cash-value-column">{brl.format(Number(item.amount))}</td><td><button type="button" className="cash-secondary-button" onClick={() => void openDetail(item.publicId)}><Eye size={16} /> Visualizar</button></td></tr>)}</tbody></table></div>{result.data.length === 0 && <p className="cash-empty">Nenhuma cobrança encontrada.</p>}<div className="cash-pagination"><button type="button" disabled={result.pagination.page <= 1 || busy} onClick={() => void load(result.pagination.page - 1)}>Anterior</button><span>Página {result.pagination.page} de {Math.max(1, result.pagination.totalPages)}</span><button type="button" disabled={result.pagination.page >= result.pagination.totalPages || busy} onClick={() => void load(result.pagination.page + 1)}>Próxima</button></div></section>
     {detail && <div className="history-modal" role="dialog" aria-modal="true" aria-label="Detalhes da cobrança"><div className="card history-detail"><div className="cash-panel-heading"><div><p className="cash-kicker">Cobrança {detail.publicId.slice(0, 8)}</p><h2>{detail.saleCode}</h2></div><button className="icon-button" type="button" onClick={() => { setDetail(null); setReceiptView(null); }} aria-label="Fechar"><X size={18} /></button></div><div className="history-detail-grid"><span>Valor <strong>{brl.format(Number(detail.amount))}</strong></span><span>Status <strong>{labels[detail.status]}</strong></span><span>Cliente/obs. <strong>{detail.description ?? "—"}</strong></span><span>Operador <strong>{detail.operator.name}</strong></span><span>Caixa <strong>{detail.cashRegister.code} · {detail.cashRegister.name}</strong></span><span>Criada em <strong>{dateTime.format(new Date(detail.createdAt))}</strong></span><span>Pago em <strong>{detail.paidAt ? dateTime.format(new Date(detail.paidAt)) : "—"}</strong></span><span>Order <strong>{detail.providerOrderIdMasked ?? "—"}</strong></span><span>Pagamento <strong>{detail.providerPaymentIdMasked ?? "—"}</strong></span></div><h3 className="mt-6 font-semibold">Histórico de status</h3><ol className="history-timeline">{detail.history.map((item, index) => <li key={`${item.createdAt}-${index}`}><span /><div><strong>{labels[item.status]}</strong><p>{item.reason ?? item.source}</p><small>{dateTime.format(new Date(item.createdAt))}</small></div></li>)}</ol><div className="pix-action-grid">{canReconcile && <button type="button" className="cash-secondary-button" onClick={() => void reconcile()} disabled={busy}><RefreshCw size={16} /> Consultar agora</button>}{detail.payment && <button type="button" className="cash-secondary-button" onClick={() => void viewReceipt()} disabled={busy}><Eye size={16} /> Ver comprovante</button>}<button type="button" className="cash-secondary-button" onClick={() => void print()}><Printer size={16} /> {detail.payment ? "Imprimir comprovante" : "Reimprimir QR Code"}</button></div>
@@ -99,6 +123,44 @@ export function ChargeHistory({ initial, canReconcile }: { initial: PaginatedDto
           <b>Pix · Documento não fiscal</b>
         </div>
       )}
+      {detail.payment && (() => {
+        const refunds = detail.payment.refunds;
+        const active = refunds.find((refund) => ["REQUESTED", "PROCESSING", "PROCESSED"].includes(refund.status));
+        return (
+          <div className="refund-section">
+            <h3 className="mt-6 font-semibold">Estorno</h3>
+            {refunds.length > 0 && (
+              <ul className="refund-list">
+                {refunds.map((refund) => (
+                  <li key={refund.publicId}>
+                    <div><strong>{refundLabels[refund.status] ?? refund.status}</strong> · {brl.format(Number(refund.amount))}<p>{refund.reason}</p><small>Solicitado por {refund.requestedBy} · {dateTime.format(new Date(refund.requestedAt))}</small></div>
+                    {canRefund && refund.status === "REQUESTED" && (
+                      <div className="refund-decide">
+                        <button type="button" className="primary-button" onClick={() => void decideRefund(refund.publicId, "approve")} disabled={busy}><Undo2 size={15} /> Aprovar</button>
+                        <button type="button" className="cash-secondary-button danger-action" onClick={() => void decideRefund(refund.publicId, "deny")} disabled={busy}><X size={15} /> Negar</button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {!active && detail.status === "PAID" && !refundFormOpen && (
+              <button type="button" className="cash-secondary-button danger-action mt-3" onClick={() => setRefundFormOpen(true)}><Undo2 size={16} /> Solicitar estorno</button>
+            )}
+            {!active && detail.status === "PAID" && refundFormOpen && (
+              <div className="refund-form mt-3">
+                <label className="field-label" htmlFor="refund-reason">Motivo do estorno</label>
+                <textarea id="refund-reason" className="field-input" rows={2} maxLength={240} value={refundReason} onChange={(event) => setRefundReason(event.target.value)} placeholder="Ex.: cliente pagou em duplicidade" autoFocus />
+                <div className="refund-decide mt-2">
+                  <button type="button" className="primary-button" onClick={() => void requestRefund()} disabled={busy || refundReason.trim().length < 8}>{canRefund ? "Registrar solicitação" : "Enviar para o administrador"}</button>
+                  <button type="button" className="cash-secondary-button" onClick={() => { setRefundFormOpen(false); setRefundReason(""); }}>Cancelar</button>
+                </div>
+                {!canRefund && <p className="mt-2 text-sm text-[var(--ink-faint)]">A solicitação vai para o administrador aprovar ou negar. Você não executa o estorno.</p>}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       </div></div>}
     {printData && <PrintReceipt><h1>{printData.storeName}</h1><p>{printData.title}</p>{printData.qrCodeBase64 && <Image src={`data:image/png;base64,${printData.qrCodeBase64}`} width={420} height={420} unoptimized alt="" />}<strong>{brl.format(Number(printData.amount))}</strong><p>Venda {printData.saleCode}</p>{printData.providerPaymentIdMasked && <p>Transação {printData.providerPaymentIdMasked}</p>}{printData.operator && <p>Operador: {printData.operator}</p>}{printData.cashRegister && <p>Caixa: {printData.cashRegister}</p>}{printData.paidAt && <small>{dateTime.format(new Date(printData.paidAt))}</small>}<b>Pix · Documento não fiscal</b></PrintReceipt>}
   </div>;

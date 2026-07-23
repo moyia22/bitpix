@@ -337,6 +337,8 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
       companyId: auth.companyId,
       ...accessibleBranchWhere(auth.branchId),
       ...(query.status ? { status: query.status } : {}),
+      // Gestão admin: filtra as sessões de um atendente específico.
+      ...(query.operator ? { operator: { publicId: query.operator } } : {}),
     };
     const sessions = await prisma.cashSession.findMany({
       where,

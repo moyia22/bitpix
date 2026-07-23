@@ -38,6 +38,14 @@ export default async function CashPage() {
     ? await apiFetch<PaginatedDto<CashMovementDto>>(`/cash-sessions/${currentSession.publicId}/movements?page=1&pageSize=10`)
     : emptyMovements;
 
+  // Gestão admin: todas as sessões de caixa ABERTAS (visão da equipe para o
+  // fechamento). Quem só consulta o próprio caixa não vê este bloco.
+  const canManageTeam = principal.permissions.includes("cash.reports.read") || principal.permissions.includes("users.read");
+  const teamSessions = canManageTeam
+    ? (await apiFetch<PaginatedDto<CashSessionDto>>("/cash-sessions?status=OPEN&pageSize=50")).data
+    : [];
+  const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
   return (
     <div className="page-container">
       <div className="cash-page-heading">
@@ -51,6 +59,27 @@ export default async function CashPage() {
           <WalletCards size={21} />
         </div>
       </div>
+      {teamSessions.length > 0 && (
+        <section className="card team-cash" aria-label="Caixas abertos da equipe">
+          <div className="team-cash-head">
+            <div><p className="cash-kicker">Gestão · Equipe</p><h2>Caixas abertos da equipe</h2></div>
+            <span className="team-cash-total">Pix recebido hoje <strong>{brl.format(teamSessions.reduce((sum, s) => sum + Number(s.totals.confirmedPix), 0))}</strong></span>
+          </div>
+          <div className="team-cash-grid">
+            {teamSessions.map((session) => (
+              <article key={session.publicId} className="team-cash-card">
+                <div className="team-cash-op"><span className="team-cash-avatar">{session.operator.name.split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase()}</span><div><strong>{session.operator.name}</strong><small>{session.cashRegister.name} · {session.cashRegister.code}</small></div></div>
+                <dl className="team-cash-stats">
+                  <div><dt>Pix confirmado</dt><dd>{brl.format(Number(session.totals.confirmedPix))}</dd></div>
+                  <div><dt>Saldo esperado</dt><dd>{brl.format(Number(session.totals.expectedBalance))}</dd></div>
+                  <div><dt>Operações</dt><dd>{session.totals.operationCount}</dd></div>
+                  <div><dt>Aberto desde</dt><dd>{new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" }).format(new Date(session.openedAt))}</dd></div>
+                </dl>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <CashConsole
         initialRegisters={registers}
         initialSession={currentSession}
