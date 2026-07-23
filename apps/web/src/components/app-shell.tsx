@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   ShoppingBag,
+  Undo2,
   Users,
   WalletCards,
   X,
@@ -42,6 +43,7 @@ const primaryNavigation: NavItem[] = [
 ];
 
 const adminNavigation: NavItem[] = [
+  { href: "/estornos", label: "Estornos", icon: Undo2, permission: "pix.refund.create" },
   { href: "/usuarios", label: "Usuários", icon: Users, permission: "users.read" },
   { href: "/funcoes", label: "Funções", icon: ShieldCheck, permission: "roles.read" },
   { href: "/filiais", label: "Filiais", icon: Building2, permission: "branches.read" },
@@ -137,12 +139,34 @@ function useUnreadNotifications(enabled: boolean): number {
   return unread;
 }
 
+// Contador ao vivo de estornos aguardando decisão do admin.
+function usePendingRefunds(enabled: boolean): number {
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    const check = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333"}/api/v1/pix/refunds?status=REQUESTED&pageSize=1`, { credentials: "include", cache: "no-store" });
+        if (!response.ok) return;
+        const body = await response.json() as { meta?: { pending?: number } };
+        if (active) setPending(body.meta?.pending ?? 0);
+      } catch { /* silencioso */ }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 25_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [enabled]);
+  return pending;
+}
+
 export function AppShell({ principal, currentCash, children }: { principal: SessionPrincipal; currentCash: CashSessionDto | null; children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const apiHealthy = useApiHealth();
   const permissions = new Set(principal.permissions);
   const unread = useUnreadNotifications(permissions.has("notifications.read"));
-  const badges = { "/notificacoes": unread };
+  const pendingRefunds = usePendingRefunds(permissions.has("pix.refund.create"));
+  const badges = { "/notificacoes": unread, "/estornos": pendingRefunds };
   const initials = principal.user.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 
   return (
@@ -165,7 +189,7 @@ export function AppShell({ principal, currentCash, children }: { principal: Sess
         </div>
 
         <NavigationGroup items={primaryNavigation} permissions={permissions} badges={badges} onNavigate={() => setSidebarOpen(false)} />
-        <NavigationGroup title="Administração" items={adminNavigation} permissions={permissions} onNavigate={() => setSidebarOpen(false)} />
+        <NavigationGroup title="Administração" items={adminNavigation} permissions={permissions} badges={badges} onNavigate={() => setSidebarOpen(false)} />
         <NavigationGroup title="Superadmin" items={platformNavigation} permissions={permissions} onNavigate={() => setSidebarOpen(false)} />
 
         <div className="mt-auto border-t border-[var(--border)] pt-4">

@@ -246,6 +246,10 @@ export const pixRefundDenySchema = z.object({
   note: z.string().trim().max(240).optional(),
 });
 
+export const pixRefundListQuerySchema = paginationSchema.extend({
+  status: z.enum(["REQUESTED", "PROCESSING", "PROCESSED", "FAILED", "CANCELLED"]).optional(),
+});
+
 const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const analyticsFilterSchema = z.object({
   preset: z.enum(["today", "yesterday", "7d", "30d", "current_month", "previous_month", "custom"]).default("7d"),

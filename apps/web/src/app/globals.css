@@ -1245,6 +1245,19 @@ a {
 .team-cash-stats dt { font-size: 0.72rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
 .team-cash-stats dd { margin: 2px 0 0; font-weight: 700; font-size: 0.98rem; }
 
+/* Fila de estornos pendentes (gestão admin). */
+.refund-queue { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.refund-queue-card { display: flex; flex-direction: column; gap: 12px; animation: reveal-up 0.3s var(--ease-out) both; }
+.refund-queue-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.refund-queue-head h2 { margin: 2px 0 0; font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; }
+.refund-queue-head .cash-secondary-button { width: auto; padding: 8px 12px; }
+.refund-queue-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin: 0; }
+.refund-queue-facts dt { font-size: 0.7rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.refund-queue-facts dd { margin: 2px 0 0; font-weight: 600; font-size: 0.9rem; }
+.refund-queue-reason { border-left: 3px solid var(--warning); background: var(--warning-soft); border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; }
+.refund-queue-card .refund-decide { margin-top: auto; }
+.refund-queue-card .refund-decide button { width: auto; }
+
 /* Estorno: lista de solicitações e formulário de motivo. */
 .refund-section { border-top: 1px solid var(--border); margin-top: 20px; padding-top: 8px; }
 .refund-list { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 0; padding: 0; list-style: none; }

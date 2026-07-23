@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { pixChargeHistoryQuerySchema, pixRefundCreateSchema, pixRefundDenySchema, pixRefundRequestSchema, printPixChargeSchema } from "@bitpix/contracts";
+import { pixChargeHistoryQuerySchema, pixRefundCreateSchema, pixRefundDenySchema, pixRefundListQuerySchema, pixRefundRequestSchema, printPixChargeSchema } from "@bitpix/contracts";
 import {
   AuditOutcome,
   NotificationType,
@@ -152,7 +152,7 @@ export async function paymentOperationsRoutes(app: FastifyInstance): Promise<voi
   // ---- Fluxo de solicitação de estorno (atendente pede → admin decide) ----
   // Solicitar: qualquer usuário que enxerga cobranças pode pedir; nada é
   // executado no provedor — o pedido fica REQUESTED aguardando o admin.
-  app.post<{ Params: { publicId: string } }>("/pix/payments/:publicId/refund-requests", { preHandler: requirePermission("pix.charge.read") }, async (request, reply) => {
+  app.post<{ Params: { publicId: string } }>("/pix/payments/:publicId/refund-requests", { preHandler: requirePermission("pix.charge.read"), config: { rateLimit: { max: 10, timeWindow: "1 minute" } } }, async (request, reply) => {
     const body = pixRefundRequestSchema.parse(request.body);
     const auth = request.auth!;
     const payment = await prisma.pixPayment.findFirst({ where: { publicId: request.params.publicId, companyId: auth.companyId }, include: { pixCharge: { include: { sale: { select: { saleCode: true } } } } } });
@@ -199,6 +199,35 @@ export async function paymentOperationsRoutes(app: FastifyInstance): Promise<voi
       await writeAudit({ request, client: tx, action: "pix.refund.denied", entity: "PixRefund", entityPublicId: refund.publicId, metadata: { note: body.note ?? null } });
     });
     return { data: { publicId: refund.publicId, status: PixRefundStatus.CANCELLED } };
+  });
+
+  // Fila de estornos (gestão admin): lista paginada, padrão = pendentes de decisão.
+  app.get("/pix/refunds", { preHandler: requirePermission("pix.refund.read") }, async (request) => {
+    const query = pixRefundListQuerySchema.parse(request.query);
+    const where = { companyId: request.auth!.companyId, ...(query.status ? { status: query.status } : {}) };
+    const [refunds, total, pendingCount] = await Promise.all([
+      prisma.pixRefund.findMany({ where, include: { requestedBy: { select: { name: true } }, pixPayment: { select: { amount: true, providerPaymentId: true, pixCharge: { select: { publicId: true, sale: { select: { saleCode: true, description: true } }, cashSession: { select: { cashRegister: { select: { name: true } } } } } } } } }, orderBy: { createdAt: "desc" }, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
+      prisma.pixRefund.count({ where }),
+      prisma.pixRefund.count({ where: { companyId: request.auth!.companyId, status: PixRefundStatus.REQUESTED } }),
+    ]);
+    return {
+      data: refunds.map((refund) => ({
+        publicId: refund.publicId,
+        status: refund.status,
+        amount: refund.amount.toFixed(2),
+        reason: refund.reason,
+        requestedBy: refund.requestedBy.name,
+        requestedAt: refund.requestedAt.toISOString(),
+        processedAt: refund.processedAt?.toISOString() ?? null,
+        saleCode: refund.pixPayment.pixCharge.sale.saleCode,
+        description: refund.pixPayment.pixCharge.sale.description,
+        cashRegister: refund.pixPayment.pixCharge.cashSession.cashRegister.name,
+        chargePublicId: refund.pixPayment.pixCharge.publicId,
+        providerPaymentIdMasked: mask(refund.pixPayment.providerPaymentId),
+      })),
+      pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.ceil(total / query.pageSize) },
+      meta: { pending: pendingCount },
+    };
   });
 
   app.get<{ Params: { publicId: string } }>("/pix/refunds/:publicId", { preHandler: requirePermission("pix.refund.read") }, async (request) => {
