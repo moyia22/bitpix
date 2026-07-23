@@ -23,6 +23,7 @@ import { pixChargeDto, pixChargeInclude } from "./pix-charge.service.js";
 import { incrementPaymentMetric } from "./payment-metrics.js";
 import { getPaymentProvider } from "./providers/provider-factory.js";
 import { resolvePayerEmail } from "./payer-email.js";
+import { MercadoPagoWebhookProcessor } from "./mercado-pago-webhook-processor.js";
 import { ProviderError } from "./providers/payment-provider.js";
 import { toPixChargeStatus } from "./providers/status-mapper.js";
 
@@ -234,10 +235,26 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { publicId: string } }>("/pix/charges/:publicId", { preHandler: requirePermission("pix.charge.read") }, async (request) => {
     if (request.headers["x-bitpix-polling"] === "true") incrementPaymentMetric("polling_requests_total");
-    const charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId }, include: pixChargeInclude });
+    let charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId }, include: pixChargeInclude });
     if (!charge) {
       await writeAudit({ request, action: "pix.charge.read_denied", entity: "PixCharge", entityPublicId: request.params.publicId, outcome: AuditOutcome.FAILURE, metadata: { reason: "not_found_or_cross_tenant" } });
       throw new AppError(404, "PIX_CHARGE_NOT_FOUND", "Cobrança Pix não encontrada.");
+    }
+
+    // Auto-reconciliação: enquanto a cobrança pende e a última checagem oficial
+    // está velha (>10s), consulta o Mercado Pago AGORA. Garante confirmação em
+    // segundos via polling mesmo se o webhook não chegar (não configurado/perdido).
+    const reconcilable: PixChargeStatus[] = [PixChargeStatus.CREATING, PixChargeStatus.WAITING_PAYMENT, PixChargeStatus.PROCESSING, PixChargeStatus.UNDER_REVIEW];
+    const stale = !charge.lastProviderCheckAt || Date.now() - charge.lastProviderCheckAt.getTime() > 10_000;
+    if (charge.providerOrderId && reconcilable.includes(charge.status) && stale) {
+      try {
+        await new MercadoPagoWebhookProcessor().reconcileCharge(charge.publicId, request.auth!.companyId, request.correlationId, request.auth!.userId);
+      } catch (error) {
+        request.log.warn({ err: error, chargePublicId: charge.publicId }, "[PIX] reconciliação automática no polling falhou; mantendo status atual");
+      }
+      // Carimba a checagem para não consultar o provedor a cada poll (~4s).
+      await prisma.pixCharge.updateMany({ where: { id: charge.id, status: { in: reconcilable } }, data: { lastProviderCheckAt: new Date() } }).catch(() => undefined);
+      charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId }, include: pixChargeInclude }) ?? charge;
     }
     return { data: pixChargeDto(charge) };
   });

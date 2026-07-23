@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApiErrorBody, CashSessionDto, PixChargeDto } from "@bitpix/contracts";
-import { ArrowLeft, Calculator, Check, CircleCheckBig, Clipboard, CornerDownLeft, Delete, ExternalLink, Printer, Radio, RotateCcw, ScanLine, ShieldAlert, X } from "lucide-react";
+import { ArrowLeft, Calculator, Check, Clipboard, CornerDownLeft, Delete, ExternalLink, Printer, Radio, RotateCcw, ScanLine, ShieldAlert, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -95,20 +95,26 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
   useEffect(() => {
     if (!chargePublicId || !chargeStatus || ["PAID", "EXPIRED", "CANCELLED", "FAILED", "REFUNDED"].includes(chargeStatus)) return;
     let disposed = false;
-    let pollingTimer: number | undefined;
-    let pollingDelay = 5_000;
+    // SSE dá a atualização INSTANTÂNEA quando o webhook chega; o polling roda
+    // SEMPRE em paralelo como rede de segurança (o servidor reconcilia com o
+    // Mercado Pago quando a checagem está velha). Antes, o polling só ligava se
+    // o SSE caísse — com SSE conectado porém mudo, a tela congelava no
+    // "Aguardando pagamento" para sempre.
     const source = new EventSource(`${apiUrl}/api/v1/pix/charges/${chargePublicId}/events`, { withCredentials: true });
     const receive = () => { if (!disposed) void loadCharge(chargePublicId); };
     const eventNames = ["charge.waiting_payment", "charge.processing", "charge.paid", "charge.expired", "charge.cancelled", "charge.failed", "charge.value_mismatch", "charge.refunded", "charge.under_review"];
     eventNames.forEach((name) => source.addEventListener(name, receive));
     source.onopen = () => setConnectionState("live");
+    source.onerror = () => setConnectionState("polling");
+    let pollingDelay = 4_000;
+    let pollingTimer: number | undefined;
     const poll = async () => {
       if (disposed) return;
       if (document.visibilityState === "visible") await loadCharge(chargePublicId).catch(() => undefined);
-      pollingDelay = Math.min(15_000, Math.round(pollingDelay * 1.45));
+      pollingDelay = Math.min(12_000, Math.round(pollingDelay * 1.25));
       pollingTimer = window.setTimeout(() => void poll(), pollingDelay);
     };
-    source.onerror = () => { source.close(); setConnectionState("polling"); if (!pollingTimer) pollingTimer = window.setTimeout(() => void poll(), pollingDelay); };
+    pollingTimer = window.setTimeout(() => void poll(), pollingDelay);
     return () => { disposed = true; source.close(); if (pollingTimer) window.clearTimeout(pollingTimer); };
   }, [chargePublicId, chargeStatus, loadCharge]);
 
@@ -211,11 +217,43 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
   const remaining = `${String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:${String(remainingSeconds % 60).padStart(2, "0")}`;
   const trackingComplete = Boolean(charge && ["PAID", "EXPIRED", "CANCELLED", "FAILED", "REFUNDED"].includes(charge.status));
 
+  // Etapas vivas: refletem o estado real da venda (antes eram estáticas na página).
+  const currentStep = charge ? (charge.status === "PAID" ? 4 : 3) : amountInCents > 0 ? 2 : 1;
+  const stepper = (
+    <div className="border-b border-[var(--border)] bg-[var(--surface-subtle)] px-6 py-7 md:border-b-0 md:border-r">
+      <ol className="relative flex justify-between md:block" aria-label="Etapas da operação">
+        {["Código", "Valor", "Pix", "Pago"].map((label, index) => {
+          const number = index + 1;
+          const done = number < currentStep || (number === 4 && currentStep === 4);
+          const active = number === currentStep && !done;
+          const live = active && number === 3; // pulsando enquanto aguarda o pagamento
+          return (
+            <li key={label} className="relative z-10 flex flex-col items-center gap-2 md:mb-9 md:flex-row">
+              <span className={`grid h-8 w-8 place-items-center rounded-full border text-[0.7rem] font-bold transition-colors duration-300 ${done ? "border-[var(--success)] bg-[var(--success)] text-white" : active ? `border-[var(--primary)] bg-[var(--primary)] text-white ${live ? "step-live" : ""}` : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--ink-faint)]"}`}>
+                {done ? <Check size={15} /> : `0${number}`}
+              </span>
+              <span className={`text-xs font-bold transition-colors duration-300 ${done ? "text-[var(--success)]" : active ? "text-[var(--primary-strong)]" : "text-[var(--ink-faint)]"}`}>{label}</span>
+              {index < 3 && <span className="absolute left-[calc(50%+16px)] top-4 -z-10 h-px w-[calc(100%-32px)] bg-[var(--border)] md:left-4 md:top-8 md:h-10 md:w-px" aria-hidden="true" />}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+
   if (charge) {
     if (charge.status === "PAID") {
       return (
+        <div className="grid md:grid-cols-[128px_minmax(0,1fr)]">
+          {stepper}
+          <div className="px-6 py-7 sm:px-9 sm:py-9">
         <div className="pix-result pix-paid-result">
-          <div className="pix-paid-icon"><CircleCheckBig size={42} /></div>
+          <div className="pix-paid-icon" aria-hidden="true">
+            <svg className="paid-check" viewBox="0 0 72 72" fill="none">
+              <circle className="paid-check-circle" cx="36" cy="36" r="30" />
+              <path className="paid-check-mark" d="M22 37.5 32.5 48 50 27" />
+            </svg>
+          </div>
           <p className="cash-kicker">Liquidação validada no provedor</p>
           <h2>Pagamento confirmado</h2>
           <p className="pix-paid-value">{moneyFormatter.format(Number(charge.receivedAmount ?? charge.amount))}</p>
@@ -224,9 +262,14 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
           {printOpen && <div className="pix-print-panel" role="dialog" aria-modal="true" aria-label="Imprimir comprovante"><div><strong>Largura do papel</strong><button type="button" onClick={() => setPrintOpen(false)} aria-label="Fechar"><X size={18} /></button></div><div className="pix-paper-options"><button type="button" data-active={paperWidth === "MM58"} onClick={() => setPaperWidth("MM58")}>58 mm</button><button type="button" data-active={paperWidth === "MM80"} onClick={() => setPaperWidth("MM80")}>80 mm</button></div><button className="primary-button w-full" type="button" onClick={() => void printPaymentReceipt()}><Printer size={18} /> Imprimir comprovante</button></div>}
           <PrintReceipt><h1>{paymentReceipt?.storeName ?? "BitPix"}</h1><p>{paymentReceipt?.title ?? "Pagamento confirmado"}</p><strong>{moneyFormatter.format(Number(paymentReceipt?.amount ?? charge.receivedAmount ?? charge.amount))}</strong><p>Venda {paymentReceipt?.saleCode ?? charge.saleCode}</p><p>Transação {paymentReceipt?.providerPaymentIdMasked ?? charge.providerPaymentIdMasked}</p><p>Operador: {paymentReceipt?.operator ?? "Registrado no sistema"}</p><p>Caixa: {paymentReceipt?.cashRegister ?? charge.cashRegister.name}</p><small>{paymentReceipt?.paidAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(paymentReceipt.paidAt)) : ""}</small><b>{paymentReceipt?.paymentMethod ?? "Pix"} · {paymentReceipt?.disclaimer ?? "Documento não fiscal"}</b></PrintReceipt>
         </div>
+          </div>
+        </div>
       );
     }
     return (
+      <div className="grid md:grid-cols-[128px_minmax(0,1fr)]">
+        {stepper}
+        <div className="px-6 py-7 sm:px-9 sm:py-9">
       <div className="pix-result">
         {charge.providerMode === "mock" && <div className="mock-provider-banner">Ambiente simulado — este QR Code não realiza pagamentos</div>}
         <div className="pix-result-heading">
@@ -234,6 +277,7 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
           <span className={`pix-status pix-status-${charge.status.toLowerCase()}`}>{statusLabels[charge.status]}</span>
         </div>
         <div className="pix-live-state"><Radio size={15} /> {trackingComplete ? "Acompanhamento concluído" : connectionState === "live" ? "Atualização em tempo real conectada" : connectionState === "polling" ? "Acompanhamento por contingência" : "Conectando atualização em tempo real"}</div>
+        {!trackingComplete && <div className="pix-progress" aria-hidden="true" />}
         {charge.status === "VALUE_MISMATCH" && <div className="cash-notice cash-notice-error"><ShieldAlert size={19} /><span><strong>Valor recebido divergente.</strong><br />Não entregue a venda. Solicite análise de um administrador.</span></div>}
         {charge.qrCodeBase64 && (
           <div className="pix-qr-shell">
@@ -262,10 +306,19 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
           {charge.providerMode === "mock" && <b>SEM VALOR — AMBIENTE SIMULADO</b>}
         </PrintReceipt>
       </div>
+        </div>
+      </div>
     );
   }
 
   return (
+    <div className="grid md:grid-cols-[128px_minmax(0,1fr)]">
+      {stepper}
+      <div className="px-6 py-7 sm:px-9 sm:py-9">
+        <div className="mb-8">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--primary)]">Cobrança Pix</p>
+          <h2 className="mt-2 font-[var(--font-display)] text-2xl font-semibold tracking-[-0.03em]">Dados essenciais</h2>
+        </div>
     <form onSubmit={(event) => void submit(event)} className="space-y-6">
       {readiness.providerMode === "mock" && <div className="mock-provider-banner">Provedor em modo simulado — nenhum pagamento real será criado</div>}
       <div>
@@ -333,5 +386,7 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
       {!currentCash && <div className="rounded-xl border border-[color-mix(in_srgb,var(--warning)_28%,var(--border))] bg-[var(--warning-soft)] px-4 py-3.5 text-sm text-[var(--ink)]"><strong className="block">Abra o caixa antes de gerar uma cobrança.</strong><Link href="/caixa" className="mt-2 inline-flex font-bold text-[var(--warning)]">Abrir caixa →</Link></div>}
       <button className="primary-button w-full" type="submit" disabled={!currentCash || !readiness.configured || !code.trim() || amountInCents <= 0 || submitting}>{submitting ? "Gerando Pix…" : "Gerar Pix"}<span className="ml-auto flex items-center gap-1 rounded-md bg-white/14 px-2 py-1 text-[0.72rem] font-semibold"><CornerDownLeft size={13} /> Enter</span></button>
     </form>
+      </div>
+    </div>
   );
 }

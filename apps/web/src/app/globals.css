@@ -1178,6 +1178,25 @@ a {
 @keyframes bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @keyframes soft-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @keyframes ring-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 45%, transparent); } 70% { box-shadow: 0 0 0 18px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* --- Nova venda: acompanhamento vivo e confirmação de pagamento --- */
+/* Check desenhado (traço animado) dentro do selo de pagamento confirmado. */
+.paid-check { width: 46px; height: 46px; }
+.paid-check circle, .paid-check path { stroke: currentColor; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.paid-check-circle { stroke-dasharray: 189; stroke-dashoffset: 189; animation: draw-stroke 0.55s ease-out 0.1s forwards; }
+.paid-check-mark { stroke-dasharray: 44; stroke-dashoffset: 44; animation: draw-stroke 0.4s ease-out 0.6s forwards; }
+@keyframes draw-stroke { to { stroke-dashoffset: 0; } }
+/* Conteúdo do "Pago" revela em cascata. */
+.pix-paid-result h2 { animation: reveal-up 0.4s var(--ease-out) 0.25s both; }
+.pix-paid-value { animation: reveal-up 0.45s var(--ease-out) 0.4s both; }
+.pix-paid-result .pix-reference, .pix-paid-result .pix-action-grid { animation: reveal-up 0.45s var(--ease-out) 0.55s both; }
+/* Barra de progresso indeterminada enquanto aguarda o pagamento. */
+.pix-progress { margin-top: 12px; height: 3px; border-radius: 999px; overflow: hidden; background: color-mix(in srgb, var(--primary) 14%, transparent); }
+.pix-progress::after { content: ""; display: block; height: 100%; width: 42%; border-radius: 999px; background: var(--primary-gradient); animation: progress-slide 1.5s ease-in-out infinite; }
+@keyframes progress-slide { from { transform: translateX(-120%); } to { transform: translateX(340%); } }
+/* Etapa "Pix" pulsando enquanto o pagamento não confirma. */
+.step-live { animation: step-live-pulse 1.7s ease-out infinite; }
+@keyframes step-live-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 45%, transparent); } 70% { box-shadow: 0 0 0 10px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 @keyframes sheen { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* --- Chrome: topbar de vidro e sidebar com profundidade --- */
