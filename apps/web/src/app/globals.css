@@ -1292,6 +1292,37 @@ a {
 .setup-steps li small { display: block; color: var(--ink-faint); font-size: 0.8rem; }
 .setup-steps .cash-secondary-button { width: auto; padding: 8px 14px; }
 
+/* Editor de impressão estilo Canva (controles + prévia ao vivo). */
+.print-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 22px; align-items: start; }
+.print-editor-controls { display: flex; flex-direction: column; gap: 18px; }
+.print-group { border: 1px solid var(--border); border-radius: 16px; padding: 16px; background: var(--surface); }
+.print-group h3 { margin: 0 0 12px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--primary); font-weight: 800; }
+.print-group .field-label { margin-bottom: 12px; }
+.print-group .field-label:last-child { margin-bottom: 0; }
+.print-group .file-button { width: auto; }
+.print-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.print-toggle { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface-subtle); margin-top: 4px; }
+.print-toggle button { flex: 1; padding: 8px 12px; border-radius: 8px; font-weight: 700; font-size: 0.85rem; color: var(--ink-muted); }
+.print-toggle button[data-active="true"] { background: var(--primary-soft); color: var(--primary-strong); }
+.print-group input[type="range"] { width: 100%; accent-color: var(--primary); }
+
+.print-editor-preview { position: sticky; top: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.print-preview-hint { font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-faint); }
+.print-preview { width: 100%; max-width: 320px; background: #fff; color: #111; border-radius: 12px; padding: 18px 16px; box-shadow: var(--shadow-lg); font-family: "Courier New", monospace; line-height: 1.4; border: 1px solid #e3e3e3; }
+.print-preview[data-width="MM58"] { max-width: 232px; }
+.print-preview .pp-logo { max-width: 60%; height: auto; margin: 0 auto 8px; display: inline-block; }
+.print-preview .pp-logo-name { font-size: 0.7rem; color: #888; margin-bottom: 6px; }
+.print-preview .pp-store { margin: 0; font-size: 1.1rem; font-weight: 800; font-family: Arial, sans-serif; }
+.print-preview .pp-title { margin: 2px 0 8px; font-size: 0.82rem; }
+.print-preview .pp-msg { margin: 6px 0; font-size: 0.78rem; }
+.print-preview .pp-amount { display: block; font-size: 1.4rem; font-weight: 800; font-family: Arial, sans-serif; margin: 6px 0; }
+.print-preview .pp-qr { display: inline-grid; place-items: center; color: #111; }
+.print-preview .pp-code { margin: 6px 0; font-size: 0.6rem; word-break: break-all; color: #444; }
+.print-preview .pp-lines { display: flex; flex-direction: column; gap: 2px; font-size: 0.74rem; margin: 8px 0; }
+.print-preview .pp-footer { margin: 8px 0 0; font-size: 0.76rem; }
+.print-preview .pp-nonfiscal { display: inline-block; margin-top: 8px; font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid #111; border-radius: 6px; padding: 3px 7px; }
+@media (max-width: 900px) { .print-editor { grid-template-columns: 1fr; } .print-editor-preview { position: static; order: -1; } }
+
 /* Auditoria. */
 .audit-filters { display: grid; grid-template-columns: 1.6fr 0.9fr 0.9fr 0.9fr auto; gap: 12px; align-items: end; padding: 16px; }
 .audit-filters label { display: flex; flex-direction: column; gap: 6px; font-size: 0.78rem; font-weight: 700; color: var(--ink-muted); }
