@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApiErrorBody, CashSessionDto, PixChargeDto } from "@bitpix/contracts";
-import { ArrowLeft, Calculator, Check, Clipboard, CornerDownLeft, Delete, ExternalLink, Printer, Radio, RotateCcw, ScanLine, ShieldAlert, X } from "lucide-react";
+import { ArrowLeft, Calculator, Check, Clipboard, CornerDownLeft, Delete, ExternalLink, Maximize2, Printer, Radio, RotateCcw, ScanLine, ShieldAlert, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -61,6 +61,7 @@ export function NewSaleForm({ currentCash, readiness, automation, quickItems = [
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [clientMode, setClientMode] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const [paperWidth, setPaperWidth] = useState<"MM58" | "MM80">("MM80");
   const [keypadOpen, setKeypadOpen] = useState(true);
@@ -208,7 +209,7 @@ export function NewSaleForm({ currentCash, readiness, automation, quickItems = [
     return body.data.receipt;
   }, [charge, paperWidth]);
 
-  const newSale = useCallback(() => { setCharge(null); setCode(""); setCustomerEmail(""); setDescription(""); setDetailsOpen(false); setAmountInCents(0); setError(""); setConnectionState("idle"); window.setTimeout(() => codeRef.current?.focus(), 0); }, [setCharge, setCode, setCustomerEmail, setDescription, setDetailsOpen, setAmountInCents, setError, setConnectionState]);
+  const newSale = useCallback(() => { setCharge(null); setCode(""); setCustomerEmail(""); setDescription(""); setDetailsOpen(false); setAmountInCents(0); setError(""); setClientMode(false); setConnectionState("idle"); window.setTimeout(() => codeRef.current?.focus(), 0); }, [setCharge, setCode, setCustomerEmail, setDescription, setDetailsOpen, setAmountInCents, setError, setClientMode, setConnectionState]);
 
   // ---- Automações das Configurações ----
   // Imprimir comprovante automaticamente quando o pagamento confirma.
@@ -254,10 +255,34 @@ export function NewSaleForm({ currentCash, readiness, automation, quickItems = [
     </div>
   );
 
+  // Tela do cliente: overlay em tela cheia com QR grande para o cliente escanear
+  // (e confirmação quando o pagamento cai). Persiste entre "aguardando" e "pago".
+  const clientOverlay = clientMode && charge ? (
+    <div className="client-display" role="dialog" aria-modal="true" aria-label="Pagamento Pix">
+      <button type="button" className="client-display-close" onClick={() => setClientMode(false)} aria-label="Fechar"><X size={24} /></button>
+      {charge.status === "PAID" ? (
+        <div className="client-display-paid">
+          <div className="pix-paid-icon" aria-hidden="true"><svg className="paid-check" viewBox="0 0 72 72" fill="none"><circle className="paid-check-circle" cx="36" cy="36" r="30" /><path className="paid-check-mark" d="M22 37.5 32.5 48 50 27" /></svg></div>
+          <p className="client-display-kicker">Pagamento aprovado</p>
+          <strong className="client-amount">{moneyFormatter.format(Number(charge.receivedAmount ?? charge.amount))}</strong>
+          <p className="client-thanks">Obrigado! Pode retirar seu pedido.</p>
+        </div>
+      ) : (
+        <>
+          <p className="client-display-kicker">Escaneie para pagar com Pix</p>
+          {charge.qrCodeBase64 && <div className="client-qr"><Image src={`data:image/png;base64,${charge.qrCodeBase64}`} width={560} height={560} unoptimized alt="QR Code Pix" priority /></div>}
+          <strong className="client-amount">{moneyFormatter.format(Number(charge.amount))}</strong>
+          <p className="client-timer">Expira em <span className="tabular-nums">{remaining}</span></p>
+        </>
+      )}
+    </div>
+  ) : null;
+
   if (charge) {
     if (charge.status === "PAID") {
       return (
         <div className="grid md:grid-cols-[128px_minmax(0,1fr)]">
+          {clientOverlay}
           {stepper}
           <div className="px-6 py-7 sm:px-9 sm:py-9">
         <div className="pix-result pix-paid-result">
@@ -281,6 +306,7 @@ export function NewSaleForm({ currentCash, readiness, automation, quickItems = [
     }
     return (
       <div className="grid md:grid-cols-[128px_minmax(0,1fr)]">
+        {clientOverlay}
         {stepper}
         <div className="px-6 py-7 sm:px-9 sm:py-9">
       <div className="pix-result">
@@ -303,6 +329,7 @@ export function NewSaleForm({ currentCash, readiness, automation, quickItems = [
           {copied ? <Check size={19} /> : <Clipboard size={19} />}{copied ? "Código copiado" : "Copiar código Pix"}
         </button>
         <div className="pix-action-grid">
+          <button type="button" className="cash-secondary-button" onClick={() => setClientMode(true)} disabled={!charge.qrCodeBase64}><Maximize2 size={17} /> Mostrar ao cliente</button>
           <button type="button" className="cash-secondary-button" onClick={() => setPrintOpen(true)}><Printer size={17} /> Imprimir</button>
           {charge.ticketUrl && <a className="cash-secondary-button" href={charge.ticketUrl} target="_blank" rel="noreferrer"><ExternalLink size={17} /> Abrir no provedor</a>}
           {charge.canCancel && <button type="button" className="cash-secondary-button danger-action" onClick={() => void cancelCharge()}><X size={17} /> Cancelar</button>}

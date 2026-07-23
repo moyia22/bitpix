@@ -1245,6 +1245,20 @@ a {
 .team-cash-stats dt { font-size: 0.72rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
 .team-cash-stats dd { margin: 2px 0 0; font-weight: 700; font-size: 0.98rem; }
 
+/* Tela do cliente (QR grande em tela cheia). */
+.client-display { position: fixed; inset: 0; z-index: 80; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 32px; text-align: center; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--primary) 14%, var(--surface)), var(--surface) 70%); animation: page-enter 0.3s var(--ease-out) both; }
+.client-display-close { position: absolute; top: 20px; right: 20px; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: var(--surface-muted); color: var(--ink-muted); }
+.client-display-close:hover { background: var(--surface); color: var(--ink); }
+.client-display-kicker { font-size: clamp(1rem, 2.6vw, 1.4rem); font-weight: 700; color: var(--ink-muted); }
+.client-qr { padding: clamp(14px, 2.4vw, 26px); border-radius: 28px; background: #fff; box-shadow: var(--shadow-lg); }
+.client-qr img { width: min(64vh, 82vw); height: auto; display: block; }
+.client-amount { font-family: var(--font-display); font-size: clamp(2.4rem, 8vw, 4.6rem); font-weight: 800; letter-spacing: -0.03em; color: var(--primary-strong); }
+.client-timer { font-size: clamp(0.95rem, 2.4vw, 1.3rem); color: var(--ink-muted); font-weight: 600; }
+.client-display-paid { display: flex; flex-direction: column; align-items: center; gap: 14px; animation: page-enter 0.35s var(--ease-out) both; }
+.client-display-paid .pix-paid-icon { width: clamp(96px, 16vw, 150px); height: clamp(96px, 16vw, 150px); }
+.client-display-paid .paid-check { width: clamp(58px, 10vw, 92px); height: clamp(58px, 10vw, 92px); }
+.client-thanks { font-size: clamp(1.05rem, 3vw, 1.6rem); font-weight: 700; color: var(--success); }
+
 /* Catálogo rápido no balcão (Nova Venda). */
 .quick-catalog { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
 .quick-catalog-item { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); transition: transform 0.14s var(--ease-out), border-color 0.18s ease, box-shadow 0.2s ease; }
