@@ -1210,6 +1210,25 @@ a {
 .pix-paid-icon::after { content: ""; position: absolute; inset: -4px; border-radius: inherit; border: 2px solid color-mix(in srgb, var(--success) 60%, transparent); animation: burst-ring 0.85s var(--ease-out) 0.65s both; pointer-events: none; }
 @keyframes burst-ring { from { transform: scale(0.7); opacity: 1; } to { transform: scale(1.9); opacity: 0; } }
 
+/* Badge de não lidas no menu lateral. */
+.nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 999px; background: var(--danger); color: #fff; font-size: 0.68rem; font-weight: 800; line-height: 1; }
+.nav-link[data-active="true"] .nav-badge { margin-left: auto; }
+
+/* Sino da topbar com contador. */
+.topbar-bell { position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: var(--ink-muted); transition: background-color 0.18s ease, color 0.18s ease, transform 0.14s var(--ease-out); }
+.topbar-bell:hover { background: var(--surface-muted); color: var(--ink); transform: translateY(-1px); }
+.topbar-bell-dot { position: absolute; top: 4px; right: 3px; min-width: 16px; height: 16px; padding: 0 4px; display: grid; place-items: center; border-radius: 999px; background: var(--danger); color: #fff; font-size: 0.6rem; font-weight: 800; line-height: 1; box-shadow: 0 0 0 2px var(--surface); animation: ring-pulse 1.6s ease-out 2; }
+
+/* Notificação clicável (ex.: pedido de estorno). */
+.notification-link { display: inline-block; margin-top: 6px; font-size: 0.84rem; font-weight: 700; color: var(--primary); }
+.notification-link:hover { color: var(--primary-strong); }
+.notification-list article[data-kind="refund"] > span { color: var(--warning); background: var(--warning-soft); }
+
+/* Controles do dashboard (período + atendente). */
+.dashboard-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.operator-filter { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 700; color: var(--ink-muted); }
+.operator-filter select { min-width: 170px; }
+
 /* Caixa: visão da equipe (gestão admin). */
 .team-cash { margin-bottom: 22px; }
 .team-cash-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }

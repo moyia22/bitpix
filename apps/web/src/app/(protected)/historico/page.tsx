@@ -9,8 +9,9 @@ export const metadata: Metadata = { title: "Histórico" };
 
 interface OperatorOption { publicId: string; name: string }
 
-export default async function HistoryPage() {
+export default async function HistoryPage({ searchParams }: { searchParams: Promise<{ open?: string }> }) {
   const session = await requireSession();
+  const openPublicId = (await searchParams).open;
   // Gate: sem permissão de consulta, segue para a primeira página utilizável.
   if (!session.permissions.includes("pix.charge.read")) redirect(landingPathFor(session.permissions));
   const canFilterByOperator = session.permissions.includes("users.read") || session.permissions.includes("users.manage");
@@ -29,6 +30,7 @@ export default async function HistoryPage() {
         canReconcile={session.permissions.includes("pix.charge.reconcile")}
         canRefund={session.permissions.includes("pix.refund.create")}
         operators={operators}
+        {...(openPublicId ? { openPublicId } : {})}
       />
     </div>
   );

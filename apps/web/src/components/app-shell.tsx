@@ -53,11 +53,13 @@ function NavigationGroup({
   title,
   items,
   permissions,
+  badges,
   onNavigate,
 }: {
   title?: string;
   items: NavItem[];
   permissions: Set<PermissionKey>;
+  badges?: Record<string, number>;
   onNavigate: () => void;
 }) {
   const pathname = usePathname();
@@ -82,6 +84,7 @@ function NavigationGroup({
             >
               <Icon size={19} strokeWidth={active ? 2.2 : 1.8} aria-hidden="true" />
               {item.label}
+              {(() => { const count = badges?.[item.href] ?? 0; return count > 0 ? <span className="nav-badge" aria-label={`${count} não lidas`}>{count > 99 ? "99+" : count}</span> : null; })()}
               {active && <span className="ml-auto h-5 w-1 rounded-full bg-[var(--primary)]" aria-hidden="true" />}
             </Link>
           );
@@ -113,10 +116,33 @@ function useApiHealth(): boolean {
   return healthy;
 }
 
+// Contador de notificações não lidas ao vivo (ex.: pedidos de estorno chegando).
+function useUnreadNotifications(enabled: boolean): number {
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    let active = true;
+    const check = async () => {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333"}/api/v1/notifications?pageSize=1&status=OPEN`, { credentials: "include", cache: "no-store" });
+        if (!response.ok) return;
+        const body = await response.json() as { meta?: { unread?: number } };
+        if (active) setUnread(body.meta?.unread ?? 0);
+      } catch { /* silencioso: o número volta ao recarregar */ }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 25_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [enabled]);
+  return unread;
+}
+
 export function AppShell({ principal, currentCash, children }: { principal: SessionPrincipal; currentCash: CashSessionDto | null; children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const apiHealthy = useApiHealth();
   const permissions = new Set(principal.permissions);
+  const unread = useUnreadNotifications(permissions.has("notifications.read"));
+  const badges = { "/notificacoes": unread };
   const initials = principal.user.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 
   return (
@@ -138,7 +164,7 @@ export function AppShell({ principal, currentCash, children }: { principal: Sess
           </button>
         </div>
 
-        <NavigationGroup items={primaryNavigation} permissions={permissions} onNavigate={() => setSidebarOpen(false)} />
+        <NavigationGroup items={primaryNavigation} permissions={permissions} badges={badges} onNavigate={() => setSidebarOpen(false)} />
         <NavigationGroup title="Administração" items={adminNavigation} permissions={permissions} onNavigate={() => setSidebarOpen(false)} />
         <NavigationGroup title="Superadmin" items={platformNavigation} permissions={permissions} onNavigate={() => setSidebarOpen(false)} />
 
@@ -174,6 +200,12 @@ export function AppShell({ principal, currentCash, children }: { principal: Sess
             <span className={`hidden items-center gap-2 text-sm font-semibold md:flex ${apiHealthy ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
               <Activity size={17} aria-hidden="true" /> {apiHealthy ? "API conectada" : "API instável"}
             </span>
+            {permissions.has("notifications.read") && (
+              <Link href="/notificacoes" className="topbar-bell" aria-label={`Notificações${unread > 0 ? `: ${unread} não lidas` : ""}`}>
+                <Bell size={19} />
+                {unread > 0 && <span className="topbar-bell-dot">{unread > 9 ? "9+" : unread}</span>}
+              </Link>
+            )}
             <ThemeToggle />
             <span className="hidden text-sm font-semibold sm:inline">{principal.user.name.split(" ")[0]}</span>
           </div>

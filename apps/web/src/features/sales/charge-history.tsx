@@ -3,7 +3,7 @@
 import type { PaginatedDto, PixChargeHistoryItemDto, PixChargeStatusDto } from "@bitpix/contracts";
 import { Eye, Printer, RefreshCw, Search, Undo2, X } from "lucide-react";
 import Image from "next/image";
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { PrintReceipt } from "@/components/print-receipt";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
@@ -39,7 +39,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 const refundLabels: Record<string, string> = { REQUESTED: "Aguardando aprovação", PROCESSING: "Processando no provedor", PROCESSED: "Estornado", FAILED: "Falhou", CANCELLED: "Negado" };
 
-export function ChargeHistory({ initial, canReconcile, canRefund, operators }: { initial: PaginatedDto<PixChargeHistoryItemDto>; canReconcile: boolean; canRefund: boolean; operators: Array<{ publicId: string; name: string }> }) {
+export function ChargeHistory({ initial, canReconcile, canRefund, operators, openPublicId }: { initial: PaginatedDto<PixChargeHistoryItemDto>; canReconcile: boolean; canRefund: boolean; operators: Array<{ publicId: string; name: string }>; openPublicId?: string }) {
   const [result, setResult] = useState(initial);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -59,7 +59,10 @@ export function ChargeHistory({ initial, canReconcile, canRefund, operators }: {
     finally { setBusy(false); }
   };
   const submit = (event: FormEvent) => { event.preventDefault(); void load(1); };
-  const openDetail = async (publicId: string) => { setBusy(true); setReceiptView(null); setRefundFormOpen(false); try { const body = await request<{ data: Detail }>(`/pix/charges/${publicId}/details`); setDetail(body.data); } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao abrir cobrança."); } finally { setBusy(false); } };
+  const openDetail = useCallback(async (publicId: string) => { setBusy(true); setReceiptView(null); setRefundFormOpen(false); try { const body = await request<{ data: Detail }>(`/pix/charges/${publicId}/details`); setDetail(body.data); } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao abrir cobrança."); } finally { setBusy(false); } }, [setBusy, setReceiptView, setRefundFormOpen, setDetail, setError]);
+  // Abre a venda direto ao chegar de uma notificação (?open=<publicId>).
+  const autoOpenedRef = useRef(false);
+  useEffect(() => { if (openPublicId && !autoOpenedRef.current) { autoOpenedRef.current = true; void openDetail(openPublicId); } }, [openPublicId, openDetail]);
   // Fluxo de estorno: atendente solicita; admin aprova (executa no MP) ou nega.
   const requestRefund = async () => {
     if (!detail?.payment || refundReason.trim().length < 8) { setError("Descreva o motivo do estorno (mínimo 8 caracteres)."); return; }

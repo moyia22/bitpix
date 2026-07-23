@@ -1,6 +1,9 @@
 import { ArrowDownRight, ArrowUpRight, Banknote, CircleDollarSign, Clock3, Hourglass, Receipt, RotateCcw, Store, WalletCards } from "lucide-react";
 import { redirect } from "next/navigation";
+import { OperatorFilter } from "@/components/operator-filter";
 import { apiFetch, requireSession } from "@/lib/server-api";
+
+interface OperatorOption { publicId: string; name: string }
 
 interface Dashboard {
   period: { label: string; timezone: string };
@@ -10,10 +13,15 @@ interface Dashboard {
   recentPayments: Array<{ publicId: string; saleCode: string; amount: string; operator: string; branch: string; paidAt: string }>;
 }
 const money = (value: string) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(value));
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ preset?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ preset?: string; operator?: string }> }) {
   const principal = await requireSession(); if (!principal.permissions.includes("dashboard.read")) redirect("/nova-venda");
-  const requested = (await searchParams).preset; const preset = ["today", "7d", "30d", "current_month"].includes(requested ?? "") ? requested! : "7d";
-  const dashboard = (await apiFetch<{ data: Dashboard }>(`/dashboard/summary?preset=${preset}`)).data;
+  const params = await searchParams; const preset = ["today", "7d", "30d", "current_month"].includes(params.preset ?? "") ? params.preset! : "7d"; const operator = params.operator ?? "";
+  const canFilterByOperator = principal.permissions.includes("users.read") || principal.permissions.includes("users.manage");
+  const [dashboardResponse, operators] = await Promise.all([
+    apiFetch<{ data: Dashboard }>(`/dashboard/summary?preset=${preset}${operator ? `&operatorPublicId=${operator}` : ""}`),
+    canFilterByOperator ? apiFetch<{ data: OperatorOption[] }>("/users?pageSize=50").then((body) => body.data.map((user) => ({ publicId: user.publicId, name: user.name }))) : Promise.resolve<OperatorOption[]>([]),
+  ]);
+  const dashboard = dashboardResponse.data;
   const max = Math.max(...dashboard.charts.revenueByDay.map((item) => Number(item.amount)), 1);
   const metrics = [
     { label: "Total recebido", value: money(dashboard.primary.received), note: dashboard.primary.receivedVariationPercent === null ? "Sem base anterior" : `${Math.abs(dashboard.primary.receivedVariationPercent)}% vs. período anterior`, icon: CircleDollarSign, trend: dashboard.primary.trend },
@@ -22,7 +30,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     { label: "Cobranças pendentes", value: String(dashboard.primary.pendingCharges), note: "Aguardando conclusão", icon: Hourglass },
   ];
   return <div className="page-container management-page">
-    <div className="management-heading"><div><p className="eyebrow">Visão da operação</p><h1 className="display-title">Dashboard</h1><p>Indicadores reais de {principal.company.displayName}, no fuso {dashboard.period.timezone}.</p></div><nav className="period-tabs" aria-label="Período">{[["today","Hoje"],["7d","7 dias"],["30d","30 dias"],["current_month","Mês"]].map(([key,label]) => <a key={key} data-active={preset === key} href={`/dashboard?preset=${key}`}>{label}</a>)}</nav></div>
+    <div className="management-heading"><div><p className="eyebrow">Visão da operação</p><h1 className="display-title">Dashboard</h1><p>Indicadores reais de {principal.company.displayName}, no fuso {dashboard.period.timezone}.</p></div><div className="dashboard-controls"><OperatorFilter operators={operators} current={operator}/><nav className="period-tabs" aria-label="Período">{[["today","Hoje"],["7d","7 dias"],["30d","30 dias"],["current_month","Mês"]].map(([key,label]) => <a key={key} data-active={preset === key} href={`/dashboard?preset=${key}${operator?`&operator=${operator}`:""}`}>{label}</a>)}</nav></div></div>
     <section className="metric-grid">{metrics.map((item) => { const Icon = item.icon; return <article className="card metric-card" key={item.label}><span><Icon size={20}/></span><p>{item.label}</p><strong>{item.value}</strong><small className={item.trend === "DOWN" ? "negative" : ""}>{item.trend === "UP" ? <ArrowUpRight size={14}/> : item.trend === "DOWN" ? <ArrowDownRight size={14}/> : null}{item.note}</small></article>; })}</section>
     <section className="dashboard-grid">
       <article className="card chart-card"><div className="section-heading"><div><h2>Recebimentos</h2><p>{dashboard.period.label}</p></div><strong>{money(dashboard.primary.received)}</strong></div>{dashboard.charts.revenueByDay.length ? <div className="bar-chart">{dashboard.charts.revenueByDay.map((item) => <div className="bar-column" key={item.label} title={`${item.label}: ${money(item.amount)}`}><span style={{ height: `${Math.max(4, Number(item.amount) / max * 100)}%` }}/><small>{item.label.slice(5).replace("-","/")}</small></div>)}</div> : <Empty label="Nenhum pagamento confirmado no período." />}</article>
