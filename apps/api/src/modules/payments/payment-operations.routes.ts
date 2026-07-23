@@ -39,11 +39,16 @@ const paginationQuerySchema = pixChargeHistoryQuerySchema.pick({ page: true, pag
 export async function paymentOperationsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/pix/charges", { preHandler: requirePermission("pix.charge.read") }, async (request) => {
     const query = pixChargeHistoryQuerySchema.parse(request.query);
-    const companyId = request.auth!.companyId;
+    const auth = request.auth!;
+    const companyId = auth.companyId;
+    // Sem visão gerencial, o usuário só enxerga as PRÓPRIAS cobranças (privacidade).
+    const canSeeAll = auth.permissions.has("reports.sales.read") || auth.permissions.has("users.read") || auth.permissions.has("users.manage");
     const where: Prisma.PixChargeWhereInput = {
       companyId,
+      ...(canSeeAll
+        ? (query.operator ? { sale: { operator: { publicId: query.operator } } } : {})
+        : { sale: { operatorId: auth.userId } }),
       ...(query.status ? { status: query.status } : {}),
-      ...(query.operator ? { sale: { operator: { publicId: query.operator } } } : {}),
       ...(query.from || query.to ? { createdAt: { ...(query.from ? { gte: new Date(query.from) } : {}), ...(query.to ? { lte: new Date(query.to) } : {}) } } : {}),
       ...(query.search ? { OR: [
         ...(isUuid(query.search) ? [{ publicId: query.search }] : []),
@@ -81,7 +86,9 @@ export async function paymentOperationsRoutes(app: FastifyInstance): Promise<voi
   });
 
   app.get<{ Params: { publicId: string } }>("/pix/charges/:publicId/details", { preHandler: requirePermission("pix.charge.read") }, async (request) => {
-    const charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId }, include: { sale: { include: { operator: { select: { publicId: true, name: true } } } }, cashSession: { include: { cashRegister: { select: { publicId: true, code: true, name: true } } } }, statusHistory: { orderBy: { createdAt: "asc" } }, printJobs: { select: { publicId: true, type: true, paperWidth: true, status: true, createdAt: true } }, webhookEvents: { select: { publicId: true, status: true, signatureStatus: true, processingError: true, receivedAt: true, processedAt: true }, orderBy: { receivedAt: "desc" }, take: 20 }, payment: { include: { refunds: { orderBy: { createdAt: "desc" }, include: { requestedBy: { select: { name: true } } } } } } } });
+    const detailAuth = request.auth!;
+    const detailCanSeeAll = detailAuth.permissions.has("reports.sales.read") || detailAuth.permissions.has("users.read") || detailAuth.permissions.has("users.manage");
+    const charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: detailAuth.companyId, ...(detailCanSeeAll ? {} : { sale: { operatorId: detailAuth.userId } }) }, include: { sale: { include: { operator: { select: { publicId: true, name: true } } } }, cashSession: { include: { cashRegister: { select: { publicId: true, code: true, name: true } } } }, statusHistory: { orderBy: { createdAt: "asc" } }, printJobs: { select: { publicId: true, type: true, paperWidth: true, status: true, createdAt: true } }, webhookEvents: { select: { publicId: true, status: true, signatureStatus: true, processingError: true, receivedAt: true, processedAt: true }, orderBy: { receivedAt: "desc" }, take: 20 }, payment: { include: { refunds: { orderBy: { createdAt: "desc" }, include: { requestedBy: { select: { name: true } } } } } } } });
     if (!charge) throw new AppError(404, "PIX_CHARGE_NOT_FOUND", "Cobrança Pix não encontrada.");
     return { data: { publicId: charge.publicId, saleCode: charge.sale.saleCode, description: charge.sale.description, amount: charge.amount.toFixed(2), receivedAmount: charge.receivedAmount?.toFixed(2) ?? null, status: charge.status, createdAt: charge.createdAt.toISOString(), expiresAt: charge.expiresAt.toISOString(), paidAt: charge.paidAt?.toISOString() ?? null, providerOrderIdMasked: mask(charge.providerOrderId), providerPaymentIdMasked: mask(charge.providerPaymentId), operator: charge.sale.operator, cashRegister: charge.cashSession.cashRegister, history: charge.statusHistory.map((item) => ({ status: item.status, previousStatus: item.previousStatus, source: item.source, reason: item.reason, createdAt: item.createdAt.toISOString() })), prints: charge.printJobs.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })), webhooks: charge.webhookEvents.map((item) => ({ ...item, receivedAt: item.receivedAt.toISOString(), processedAt: item.processedAt?.toISOString() ?? null })), payment: charge.payment ? { publicId: charge.payment.publicId, amount: charge.payment.amount.toFixed(2), status: charge.payment.status, paidAt: charge.payment.paidAt.toISOString(), providerPaymentIdMasked: mask(charge.payment.providerPaymentId), refunds: charge.payment.refunds.map((refund) => ({ publicId: refund.publicId, amount: refund.amount.toFixed(2), status: refund.status, reason: refund.reason, requestedBy: refund.requestedBy.name, requestedAt: refund.requestedAt.toISOString(), processedAt: refund.processedAt?.toISOString() ?? null })) } : null } };
   });

@@ -235,7 +235,10 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Params: { publicId: string } }>("/pix/charges/:publicId", { preHandler: requirePermission("pix.charge.read") }, async (request) => {
     if (request.headers["x-bitpix-polling"] === "true") incrementPaymentMetric("polling_requests_total");
-    let charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId }, include: pixChargeInclude });
+    // Sem visão gerencial, o usuário só acessa as próprias cobranças.
+    const canSeeAll = request.auth!.permissions.has("reports.sales.read") || request.auth!.permissions.has("users.read") || request.auth!.permissions.has("users.manage");
+    const ownershipWhere = canSeeAll ? {} : { sale: { operatorId: request.auth!.userId } };
+    let charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId, ...ownershipWhere }, include: pixChargeInclude });
     if (!charge) {
       await writeAudit({ request, action: "pix.charge.read_denied", entity: "PixCharge", entityPublicId: request.params.publicId, outcome: AuditOutcome.FAILURE, metadata: { reason: "not_found_or_cross_tenant" } });
       throw new AppError(404, "PIX_CHARGE_NOT_FOUND", "Cobrança Pix não encontrada.");
@@ -254,7 +257,7 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
       }
       // Carimba a checagem para não consultar o provedor a cada poll (~4s).
       await prisma.pixCharge.updateMany({ where: { id: charge.id, status: { in: reconcilable } }, data: { lastProviderCheckAt: new Date() } }).catch(() => undefined);
-      charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId }, include: pixChargeInclude }) ?? charge;
+      charge = await prisma.pixCharge.findFirst({ where: { publicId: request.params.publicId, companyId: request.auth!.companyId, ...ownershipWhere }, include: pixChargeInclude }) ?? charge;
     }
     return { data: pixChargeDto(charge) };
   });

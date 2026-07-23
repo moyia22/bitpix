@@ -1230,11 +1230,11 @@ a {
 .operator-filter select { min-width: 170px; }
 
 /* Caixa: visão da equipe (gestão admin). */
-.team-cash { margin-bottom: 22px; }
-.team-cash-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.team-cash { margin-bottom: 22px; padding: 20px 22px; }
+.team-cash-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .team-cash-head h2 { margin: 4px 0 0; font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; letter-spacing: -0.02em; }
-.team-cash-total { font-size: 0.86rem; color: var(--ink-muted); font-weight: 600; }
-.team-cash-total strong { display: block; font-size: 1.2rem; color: var(--success); }
+.team-cash-total { font-size: 0.8rem; color: var(--ink-faint); font-weight: 600; text-align: right; }
+.team-cash-total strong { display: block; font-size: 1.3rem; color: var(--success); font-weight: 800; }
 .team-cash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 .team-cash-card { border: 1px solid var(--border); border-radius: 16px; padding: 16px; background: var(--surface-subtle); transition: transform 0.2s var(--ease-out), box-shadow 0.24s var(--ease-out), border-color 0.2s ease; }
 .team-cash-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); border-color: color-mix(in srgb, var(--primary) 26%, var(--border)); }
@@ -1278,7 +1278,7 @@ a {
 .catalog-rows input { border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; background: var(--surface); font-size: 0.9rem; }
 
 /* Assistente de configuração inicial. */
-.setup-checklist { margin-bottom: 22px; border-color: color-mix(in srgb, var(--primary) 26%, var(--border)); background: linear-gradient(180deg, var(--primary-soft), var(--surface) 60%); }
+.setup-checklist { margin-bottom: 22px; padding: 20px 22px; border-color: color-mix(in srgb, var(--primary) 26%, var(--border)); background: linear-gradient(180deg, var(--primary-soft), var(--surface) 60%); }
 .setup-checklist-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .setup-checklist-head h2 { margin: 3px 0 0; font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; }
 .setup-progress { font-weight: 800; color: var(--primary-strong); background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 0.9rem; }
@@ -1321,7 +1321,7 @@ a {
 
 /* Fila de estornos pendentes (gestão admin). */
 .refund-queue { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
-.refund-queue-card { display: flex; flex-direction: column; gap: 12px; animation: reveal-up 0.3s var(--ease-out) both; }
+.refund-queue-card { display: flex; flex-direction: column; gap: 12px; padding: 18px; animation: reveal-up 0.3s var(--ease-out) both; }
 .refund-queue-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .refund-queue-head h2 { margin: 2px 0 0; font-family: var(--font-display); font-size: 1.5rem; font-weight: 700; }
 .refund-queue-head .cash-secondary-button { width: auto; padding: 8px 12px; }

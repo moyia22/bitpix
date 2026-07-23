@@ -24,7 +24,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   ]);
   return (
     <div className="page-container">
-      <div className="mb-8"><h1 className="display-title">Histórico</h1><p className="mt-2 text-[var(--ink-muted)]">Todas as cobranças Pix da sua loja, com status acompanhado em tempo real.</p></div>
+      <div className="mb-8"><h1 className="display-title">Histórico</h1><p className="mt-2 text-[var(--ink-muted)]">{canFilterByOperator ? "Todas as cobranças Pix da loja, com status em tempo real." : "Suas cobranças Pix, com status acompanhado em tempo real."}</p></div>
       <ChargeHistory
         initial={initial}
         canReconcile={session.permissions.includes("pix.charge.reconcile")}
