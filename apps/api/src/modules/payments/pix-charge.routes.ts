@@ -84,8 +84,15 @@ export async function pixChargeRoutes(app: FastifyInstance): Promise<void> {
         select: { publicId: true, status: true },
         orderBy: { createdAt: "desc" },
       }),
-      prisma.companySetting.findUnique({ where: { companyId: auth.companyId }, select: { pixPayerEmail: true } }),
+      prisma.companySetting.findUnique({ where: { companyId: auth.companyId }, select: { pixPayerEmail: true, pixBlockAmount: true } }),
     ]);
+    // Bloqueio de valor (servidor manda; não confia só na tela): acima do limite,
+    // a cobrança não pode ser gerada — receber diretamente na conta.
+    if (companySetting?.pixBlockAmount && moneyFromCents(body.amountInCents).greaterThan(companySetting.pixBlockAmount)) {
+      request.log.warn({ saleCode: body.code, amountInCents: body.amountInCents }, "[PIX] bloqueado: valor acima do limite configurado");
+      await writeAudit({ request, action: "pix.charge.denied.amount_limit", entity: "PixCharge", outcome: AuditOutcome.FAILURE, metadata: { saleCode: body.code, limit: companySetting.pixBlockAmount.toFixed(2) } });
+      throw new AppError(422, "PIX_AMOUNT_BLOCKED", `Pix bloqueado para este valor (limite de R$ ${companySetting.pixBlockAmount.toFixed(2)}). Receba diretamente na conta.`);
+    }
     if (!cashSession) {
       request.log.warn({ saleCode: body.code, userId: auth.userId }, "[PIX] bloqueado: nenhum caixa aberto para o operador");
       await writeAudit({ request, action: "pix.charge.denied.cash_closed", entity: "PixCharge", outcome: AuditOutcome.FAILURE, metadata: { saleCode: body.code } });

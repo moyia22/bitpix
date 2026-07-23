@@ -921,6 +921,8 @@ model CompanySetting {
   dateFormat                   String   @default("dd/MM/yyyy") @db.VarChar(30)
   pixPayerEmail                String?  @db.VarChar(180)
   quickItems                   Json?
+  pixReviewAmount              Decimal? @db.Decimal(18, 2)
+  pixBlockAmount               Decimal? @db.Decimal(18, 2)
   createdAt                    DateTime @default(now())
   updatedAt                    DateTime @updatedAt
   company                      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)

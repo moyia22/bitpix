@@ -5,7 +5,7 @@ import { useState, type FormEvent } from "react";
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
 
 interface QuickItem { name: string; amountInCents: number }
-type Settings = { displayName: string; timezone: string; defaultPixExpirationMinutes: number; confirmBeforePix: boolean; blockDuplicateCode: boolean; autoPrint: boolean; printAfterConfirmation: boolean; autoReturnToSale: boolean; autoReturnSeconds: number; blockCloseWithPendingCharges: boolean; minSaleAmountInCents: number; maxSaleAmountInCents: number; pixPayerEmail: string; quickItems?: QuickItem[]; paymentSoundEnabled: boolean };
+type Settings = { displayName: string; timezone: string; defaultPixExpirationMinutes: number; confirmBeforePix: boolean; blockDuplicateCode: boolean; autoPrint: boolean; printAfterConfirmation: boolean; autoReturnToSale: boolean; autoReturnSeconds: number; blockCloseWithPendingCharges: boolean; minSaleAmountInCents: number; maxSaleAmountInCents: number; pixPayerEmail: string; quickItems?: QuickItem[]; pixReviewAmountInCents?: number; pixBlockAmountInCents?: number; paymentSoundEnabled: boolean };
 
 interface ItemDraft { name: string; amount: string }
 
@@ -24,7 +24,7 @@ export function OperationalSettings({ initial }: { initial: Settings }) {
     const quickItems = items
       .map((item) => ({ name: item.name.trim(), amountInCents: Math.round(Number(item.amount.replace(",", ".")) * 100) }))
       .filter((item) => item.name.length > 0 && item.amountInCents > 0);
-    const body = { displayName: String(data.get("displayName")), timezone: String(data.get("timezone")), defaultPixExpirationMinutes: Number(data.get("expiration")), confirmBeforePix: data.has("confirm"), blockDuplicateCode: data.has("duplicate"), autoPrint: data.has("autoPrint"), printAfterConfirmation: data.has("printConfirmation"), autoReturnToSale: data.has("autoReturn"), autoReturnSeconds: Number(data.get("returnSeconds")), blockCloseWithPendingCharges: data.has("pendingClose"), minSaleAmountInCents: Math.round(Number(data.get("min")) * 100), maxSaleAmountInCents: Math.round(Number(data.get("max")) * 100), pixPayerEmail: String(data.get("payerEmail") ?? "").trim(), quickItems, paymentSoundEnabled: data.has("sound") };
+    const body = { displayName: String(data.get("displayName")), timezone: String(data.get("timezone")), defaultPixExpirationMinutes: Number(data.get("expiration")), confirmBeforePix: data.has("confirm"), blockDuplicateCode: data.has("duplicate"), autoPrint: data.has("autoPrint"), printAfterConfirmation: data.has("printConfirmation"), autoReturnToSale: data.has("autoReturn"), autoReturnSeconds: Number(data.get("returnSeconds")), blockCloseWithPendingCharges: data.has("pendingClose"), minSaleAmountInCents: Math.round(Number(data.get("min")) * 100), maxSaleAmountInCents: Math.round(Number(data.get("max")) * 100), pixPayerEmail: String(data.get("payerEmail") ?? "").trim(), quickItems, pixReviewAmountInCents: Math.round(Number(data.get("reviewAmount") || 0) * 100), pixBlockAmountInCents: Math.round(Number(data.get("blockAmount") || 0) * 100), paymentSoundEnabled: data.has("sound") };
     try {
       const response = await fetch(`${apiUrl}/api/v1/settings`, { method: "PUT", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json() as { error?: { message?: string } };
@@ -43,6 +43,8 @@ export function OperationalSettings({ initial }: { initial: Settings }) {
         <label><span>Venda mínima (R$)</span><input name="min" type="number" min=".01" step=".01" defaultValue={(initial.minSaleAmountInCents / 100).toFixed(2)} /></label>
         <label><span>Venda máxima (R$)</span><input name="max" type="number" min=".01" step=".01" defaultValue={(initial.maxSaleAmountInCents / 100).toFixed(2)} /></label>
         <label><span>E-mail Pix da empresa (pagador padrão)</span><input name="payerEmail" type="email" defaultValue={initial.pixPayerEmail} placeholder="pagador@suaempresa.com.br" /><small className="field-hint">Usado quando o cliente não informa e-mail. Domínio real — <strong>.local</strong> é recusado pelo Mercado Pago.</small></label>
+        <label><span>Avisar Pix acima de (R$)</span><input name="reviewAmount" type="number" min="0" step=".01" defaultValue={((initial.pixReviewAmountInCents ?? 0) / 100).toFixed(2)} placeholder="0,00 (desativado)" /><small className="field-hint">Acima deste valor, a tela avisa para checar se o cliente pode receber direto na conta (sem taxa) — mas ainda permite gerar. 0 = sem aviso.</small></label>
+        <label><span>Bloquear Pix acima de (R$)</span><input name="blockAmount" type="number" min="0" step=".01" defaultValue={((initial.pixBlockAmountInCents ?? 0) / 100).toFixed(2)} placeholder="0,00 (sem limite)" /><small className="field-hint">Acima deste valor, o Pix <strong>não</strong> é gerado (receba diretamente na conta). 0 = sem limite. Deve ser ≥ o valor de aviso.</small></label>
       </div>
 
       <div className="catalog-editor">

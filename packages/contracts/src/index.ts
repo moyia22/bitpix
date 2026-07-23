@@ -307,7 +307,11 @@ export const companySettingsSchema = z.object({
   pixPayerEmail: z.string().trim().max(180).optional(),
   // Catálogo rápido: botões de produto/valor no balcão.
   quickItems: z.array(quickItemSchema).max(40).optional(),
-}).refine((value) => value.maxSaleAmountInCents >= value.minSaleAmountInCents, "O valor máximo deve ser maior que o mínimo");
+  // Limites de valor do Pix (0 = desativado). "review" avisa; "block" impede.
+  pixReviewAmountInCents: z.number().int().min(0).max(99_999_999_999).optional(),
+  pixBlockAmountInCents: z.number().int().min(0).max(99_999_999_999).optional(),
+}).refine((value) => value.maxSaleAmountInCents >= value.minSaleAmountInCents, "O valor máximo deve ser maior que o mínimo")
+  .refine((value) => !value.pixBlockAmountInCents || !value.pixReviewAmountInCents || value.pixBlockAmountInCents >= value.pixReviewAmountInCents, "O limite de bloqueio deve ser maior ou igual ao de aviso");
 
 export const printTemplateSchema = z.object({
   storeName: z.string().trim().min(2).max(120),

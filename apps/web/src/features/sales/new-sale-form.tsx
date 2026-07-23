@@ -1,7 +1,7 @@
 "use client";
 
 import type { ApiErrorBody, CashSessionDto, PixChargeDto } from "@bitpix/contracts";
-import { ArrowLeft, Calculator, Check, Clipboard, CornerDownLeft, Delete, ExternalLink, Maximize2, Printer, Radio, RotateCcw, ScanLine, ShieldAlert, X } from "lucide-react";
+import { ArrowLeft, Calculator, Check, Clipboard, CornerDownLeft, Delete, ExternalLink, Maximize2, Printer, Radio, RotateCcw, ScanLine, ShieldAlert, TriangleAlert, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -48,8 +48,9 @@ async function parseError(response: Response): Promise<{ message: string; detail
 }
 
 interface QuickItem { name: string; amountInCents: number }
+interface Limits { reviewInCents: number; blockInCents: number }
 
-export function NewSaleForm({ currentCash, readiness, automation, quickItems = [] }: { currentCash: CashSessionDto | null; readiness: Readiness; automation: Automation; quickItems?: QuickItem[] }) {
+export function NewSaleForm({ currentCash, readiness, automation, quickItems = [], limits = { reviewInCents: 0, blockInCents: 0 } }: { currentCash: CashSessionDto | null; readiness: Readiness; automation: Automation; quickItems?: QuickItem[]; limits?: Limits }) {
   const codeRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState("");
@@ -71,6 +72,9 @@ export function NewSaleForm({ currentCash, readiness, automation, quickItems = [
   const confirmationPlayedRef = useRef<string | null>(null);
   const chargePublicId = charge?.publicId;
   const chargeStatus = charge?.status;
+  // Limites de valor: bloqueio (não gera) e aviso (gera, mas sugere receber direto na conta).
+  const pixBlocked = limits.blockInCents > 0 && amountInCents > limits.blockInCents;
+  const pixReview = !pixBlocked && limits.reviewInCents > 0 && amountInCents > limits.reviewInCents;
 
   useEffect(() => codeRef.current?.focus(), []);
   useEffect(() => {
@@ -148,7 +152,7 @@ export function NewSaleForm({ currentCash, readiness, automation, quickItems = [
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!currentCash || !readiness.configured || !code.trim() || amountInCents <= 0) return;
+    if (!currentCash || !readiness.configured || !code.trim() || amountInCents <= 0 || pixBlocked) return;
     setError(""); setSubmitting(true);
     try {
       const response = await fetch(`${apiUrl}/api/v1/pix/charges`, {
@@ -442,7 +446,9 @@ export function NewSaleForm({ currentCash, readiness, automation, quickItems = [
       {!readiness.configured && <div className="cash-notice cash-notice-error"><span><strong>Mercado Pago não está pronto.</strong><br />Configure e teste a integração antes de cobrar.</span><Link href="/configuracoes/integracoes/mercado-pago" className="cash-secondary-button"><ArrowLeft size={16} /> Configurar</Link></div>}
       {error && <div role="alert" className="cash-notice cash-notice-error">{error}</div>}
       {!currentCash && <div className="rounded-xl border border-[color-mix(in_srgb,var(--warning)_28%,var(--border))] bg-[var(--warning-soft)] px-4 py-3.5 text-sm text-[var(--ink)]"><strong className="block">Abra o caixa antes de gerar uma cobrança.</strong><Link href="/caixa" className="mt-2 inline-flex font-bold text-[var(--warning)]">Abrir caixa →</Link></div>}
-      <button className="primary-button w-full" type="submit" disabled={!currentCash || !readiness.configured || !code.trim() || amountInCents <= 0 || submitting}>{submitting ? "Gerando Pix…" : "Gerar Pix"}<span className="ml-auto flex items-center gap-1 rounded-md bg-white/14 px-2 py-1 text-[0.72rem] font-semibold"><CornerDownLeft size={13} /> Enter</span></button>
+      {pixBlocked && <div role="alert" className="cash-notice cash-notice-error"><ShieldAlert size={19} /><span><strong>Pix bloqueado para este valor.</strong><br />Acima de {moneyFormatter.format(limits.blockInCents / 100)}, receba diretamente na conta.</span></div>}
+      {pixReview && <div className="pix-review-notice"><TriangleAlert size={19} /><span><strong>Valor alto — revise antes de gerar.</strong><br />Se o cliente tem bom histórico, receba direto na conta (sem taxa). Você ainda pode gerar o Pix.</span></div>}
+      <button className="primary-button w-full" type="submit" disabled={!currentCash || !readiness.configured || !code.trim() || amountInCents <= 0 || submitting || pixBlocked}>{submitting ? "Gerando Pix…" : pixBlocked ? "Valor bloqueado" : "Gerar Pix"}<span className="ml-auto flex items-center gap-1 rounded-md bg-white/14 px-2 py-1 text-[0.72rem] font-semibold"><CornerDownLeft size={13} /> Enter</span></button>
     </form>
       </div>
     </div>

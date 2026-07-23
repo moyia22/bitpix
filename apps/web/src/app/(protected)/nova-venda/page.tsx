@@ -47,8 +47,8 @@ export default async function NewSalePage() {
     apiFetch<{ data: ActivityItem[] }>("/activity/recent"),
     apiFetch<{ data: CashSessionDto | null }>("/cash-sessions/current"),
     apiFetch<{ data: { configured: boolean; status: string; providerMode: "real" | "mock"; lastVerifiedAt: string | null } }>("/pix/readiness"),
-    // Automações + catálogo rápido de produtos/valores.
-    apiFetch<{ data: { autoPrint: boolean; printAfterConfirmation: boolean; autoReturnToSale: boolean; autoReturnSeconds: number; quickItems: Array<{ name: string; amountInCents: number }> } }>("/settings/effective"),
+    // Automações + catálogo rápido + limites de valor do Pix.
+    apiFetch<{ data: { autoPrint: boolean; printAfterConfirmation: boolean; autoReturnToSale: boolean; autoReturnSeconds: number; quickItems: Array<{ name: string; amountInCents: number }>; pixReviewAmountInCents: number; pixBlockAmountInCents: number } }>("/settings/effective"),
   ]);
   const currentCash = cash.data;
   const automation = {
@@ -74,7 +74,7 @@ export default async function NewSalePage() {
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
         <section className="card overflow-hidden" aria-label="Venda Pix">
-          <NewSaleForm currentCash={currentCash} readiness={readiness.data} automation={automation} quickItems={effective.data.quickItems ?? []} />
+          <NewSaleForm currentCash={currentCash} readiness={readiness.data} automation={automation} quickItems={effective.data.quickItems ?? []} limits={{ reviewInCents: effective.data.pixReviewAmountInCents ?? 0, blockInCents: effective.data.pixBlockAmountInCents ?? 0 }} />
         </section>
 
         <aside className="space-y-6">

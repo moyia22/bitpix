@@ -1292,6 +1292,10 @@ a {
 .setup-steps li small { display: block; color: var(--ink-faint); font-size: 0.8rem; }
 .setup-steps .cash-secondary-button { width: auto; padding: 8px 14px; }
 
+/* Aviso de revisão de valor alto (Nova Venda) — não bloqueia, só alerta. */
+.pix-review-notice { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border)); background: var(--warning-soft); color: var(--ink); font-size: 0.9rem; }
+.pix-review-notice > svg:first-child { color: var(--warning); flex-shrink: 0; margin-top: 1px; }
+
 /* Editor de impressão estilo Canva (controles + prévia ao vivo). */
 .print-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 22px; align-items: start; }
 .print-editor-controls { display: flex; flex-direction: column; gap: 18px; }
