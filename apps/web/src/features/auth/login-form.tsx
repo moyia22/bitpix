@@ -2,6 +2,7 @@
 
 import { Eye, EyeOff, LoaderCircle, LogIn, ShieldCheck } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { landingPathFor } from "@/lib/landing";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
 
@@ -42,7 +43,9 @@ export function LoginForm() {
         setError(body.error?.message ?? "Não foi possível entrar.");
         return;
       }
-      window.location.assign("/nova-venda");
+      // Direciona para a primeira página que o papel do usuário pode usar.
+      const body = await response.json() as { data?: { permissions?: string[] } };
+      window.location.assign(landingPathFor(body.data?.permissions ?? []));
     } catch {
       setError("A API não está disponível. Verifique se os serviços estão ativos.");
     } finally {

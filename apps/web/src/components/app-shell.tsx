@@ -32,7 +32,7 @@ interface NavItem {
 }
 
 const primaryNavigation: NavItem[] = [
-  { href: "/nova-venda", label: "Nova venda", icon: ShoppingBag, permission: "sales.create" },
+  { href: "/nova-venda", label: "Nova venda", icon: ShoppingBag, permission: "pix.charge.create" },
   { href: "/dashboard", label: "Dashboard", icon: BarChart3, permission: "dashboard.read" },
   { href: "/historico", label: "Histórico", icon: History, permission: "sales.read" },
   { href: "/caixa", label: "Caixa", icon: WalletCards, permission: "cash.session.read" },

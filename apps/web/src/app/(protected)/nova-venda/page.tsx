@@ -2,8 +2,10 @@ import type { CashSessionDto } from "@bitpix/contracts";
 import type { Metadata } from "next";
 import { Activity, CheckCircle2, Clock3, LockKeyhole, Radio } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { NewSaleForm } from "@/features/sales/new-sale-form";
-import { apiFetch } from "@/lib/server-api";
+import { landingPathFor } from "@/lib/landing";
+import { apiFetch, requireSession } from "@/lib/server-api";
 
 export const metadata: Metadata = { title: "Nova venda" };
 
@@ -36,6 +38,10 @@ const activityLabels: Record<string, string> = {
 };
 
 export default async function NewSalePage() {
+  // Gate por permissão: quem não pode vender (ex.: gerente) vai para a primeira
+  // página que pode usar, em vez de estourar 403 nas chamadas abaixo.
+  const principal = await requireSession();
+  if (!principal.permissions.includes("pix.charge.create")) redirect(landingPathFor(principal.permissions));
   const [activity, cash, readiness] = await Promise.all([
     apiFetch<{ data: ActivityItem[] }>("/activity/recent"),
     apiFetch<{ data: CashSessionDto | null }>("/cash-sessions/current"),

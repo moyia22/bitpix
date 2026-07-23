@@ -7,7 +7,7 @@ import { writeAudit } from "../../lib/audit.js";
 import { hashSessionToken } from "./auth.service.js";
 import { requiresMfa } from "./mfa-policy.js";
 
-export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
+export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const token = request.cookies[env.SESSION_COOKIE_NAME];
   if (!token) throw unauthorized();
 
@@ -101,7 +101,26 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
   }
 
   if (now.getTime() - session.lastSeenAt.getTime() > 5 * 60 * 1000) {
-    await prisma.userSession.update({ where: { id: session.id }, data: { lastSeenAt: now } });
+    // Sessão deslizante: atividade renova a validade (e o cookie) até um teto
+    // absoluto de 7 dias. Assim, deploy/reinício NUNCA desloga um usuário ativo;
+    // inatividade de SESSION_TTL_HOURS continua expirando normalmente e
+    // logout/revogação seguem imediatos (checados do banco a cada requisição).
+    const absoluteLimitMs = session.createdAt.getTime() + 7 * 24 * 60 * 60 * 1000;
+    const renewedAt = new Date(Math.min(now.getTime() + env.SESSION_TTL_HOURS * 3_600_000, absoluteLimitMs));
+    const shouldRenew = renewedAt.getTime() > session.expiresAt.getTime();
+    await prisma.userSession.update({
+      where: { id: session.id },
+      data: shouldRenew ? { lastSeenAt: now, expiresAt: renewedAt } : { lastSeenAt: now },
+    });
+    if (shouldRenew) {
+      reply.setCookie(env.SESSION_COOKIE_NAME, token, {
+        path: "/",
+        httpOnly: true,
+        secure: env.APP_ENV === "production",
+        sameSite: "lax",
+        maxAge: Math.floor((renewedAt.getTime() - now.getTime()) / 1000),
+      });
+    }
   }
 }
 

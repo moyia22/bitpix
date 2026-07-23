@@ -6,7 +6,9 @@ import type {
 } from "@bitpix/contracts";
 import type { Metadata } from "next";
 import { ShieldCheck, WalletCards } from "lucide-react";
+import { redirect } from "next/navigation";
 import { CashConsole } from "@/features/cash/cash-console";
+import { landingPathFor } from "@/lib/landing";
 import { apiFetch, requireSession } from "@/lib/server-api";
 
 export const metadata: Metadata = { title: "Caixa" };
@@ -25,6 +27,8 @@ const emptyMovements: PaginatedDto<CashMovementDto> = {
 
 export default async function CashPage() {
   const principal = await requireSession();
+  // Gate: sem permissão de caixa, segue para a primeira página utilizável (evita 403).
+  if (!principal.permissions.includes("cash.session.read")) redirect(landingPathFor(principal.permissions));
   const [{ data: registers }, { data: currentSession }, { data: branches }] = await Promise.all([
     apiFetch<{ data: CashRegisterDto[] }>("/cash-registers"),
     apiFetch<{ data: CashSessionDto | null }>("/cash-sessions/current"),
