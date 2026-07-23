@@ -281,6 +281,13 @@ export const exportRequestSchema = z.object({
   filters: reportFilterSchema.omit({ page: true, pageSize: true }).default({}),
 });
 
+// Item do catálogo rápido (produto/valor tocável no balcão).
+export const quickItemSchema = z.object({
+  name: z.string().trim().min(1, "Informe o nome do item").max(40),
+  amountInCents: z.number().int().min(1).max(99_999_999),
+});
+export type QuickItemDto = z.infer<typeof quickItemSchema>;
+
 export const companySettingsSchema = z.object({
   displayName: z.string().trim().min(2).max(120),
   timezone: z.string().trim().min(3).max(80),
@@ -298,6 +305,8 @@ export const companySettingsSchema = z.object({
   // E-mail válido da empresa usado como pagador do Pix quando o cliente não informa um.
   // "" limpa o valor. A validação de domínio real (recusa .local) é feita no backend.
   pixPayerEmail: z.string().trim().max(180).optional(),
+  // Catálogo rápido: botões de produto/valor no balcão.
+  quickItems: z.array(quickItemSchema).max(40).optional(),
 }).refine((value) => value.maxSaleAmountInCents >= value.minSaleAmountInCents, "O valor máximo deve ser maior que o mínimo");
 
 export const printTemplateSchema = z.object({

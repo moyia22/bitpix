@@ -1245,6 +1245,24 @@ a {
 .team-cash-stats dt { font-size: 0.72rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
 .team-cash-stats dd { margin: 2px 0 0; font-weight: 700; font-size: 0.98rem; }
 
+/* Catálogo rápido no balcão (Nova Venda). */
+.quick-catalog { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+.quick-catalog-item { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); transition: transform 0.14s var(--ease-out), border-color 0.18s ease, box-shadow 0.2s ease; }
+.quick-catalog-item:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); box-shadow: var(--shadow-sm); }
+.quick-catalog-item:active { transform: translateY(0) scale(0.97); }
+.quick-catalog-item span { font-size: 0.82rem; font-weight: 700; color: var(--ink); }
+.quick-catalog-item strong { font-size: 0.78rem; font-weight: 800; color: var(--primary-strong); }
+
+/* Editor de catálogo (Configurações). */
+.catalog-editor { margin: 18px 0; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-subtle); }
+.catalog-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.catalog-editor-head small { display: block; color: var(--ink-faint); font-size: 0.8rem; }
+.catalog-editor-head .cash-secondary-button { width: auto; padding: 8px 12px; }
+.catalog-empty { color: var(--ink-muted); font-size: 0.88rem; }
+.catalog-rows { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.catalog-rows li { display: grid; grid-template-columns: 1fr 130px auto; gap: 8px; align-items: center; }
+.catalog-rows input { border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; background: var(--surface); font-size: 0.9rem; }
+
 /* Assistente de configuração inicial. */
 .setup-checklist { margin-bottom: 22px; border-color: color-mix(in srgb, var(--primary) 26%, var(--border)); background: linear-gradient(180deg, var(--primary-soft), var(--surface) 60%); }
 .setup-checklist-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }

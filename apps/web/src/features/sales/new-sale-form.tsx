@@ -47,7 +47,9 @@ async function parseError(response: Response): Promise<{ message: string; detail
   return { message: body.error?.message ?? "Não foi possível concluir a operação.", ...(details ? { details } : {}) };
 }
 
-export function NewSaleForm({ currentCash, readiness, automation }: { currentCash: CashSessionDto | null; readiness: Readiness; automation: Automation }) {
+interface QuickItem { name: string; amountInCents: number }
+
+export function NewSaleForm({ currentCash, readiness, automation, quickItems = [] }: { currentCash: CashSessionDto | null; readiness: Readiness; automation: Automation; quickItems?: QuickItem[] }) {
   const codeRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const [code, setCode] = useState("");
@@ -87,6 +89,8 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
   const pushDigit = (digit: number) => { setAmountInCents((previous) => Math.min(previous * 10 + digit, 99_999_999)); popAmount(); amountRef.current?.focus(); };
   const pushDoubleZero = () => { setAmountInCents((previous) => Math.min(previous * 100, 99_999_999)); popAmount(); amountRef.current?.focus(); };
   const backspaceAmount = () => { setAmountInCents((previous) => Math.floor(previous / 10)); popAmount(); amountRef.current?.focus(); };
+  // Catálogo rápido: soma o valor do produto e nomeia a venda com um toque.
+  const pickQuickItem = (item: QuickItem) => { setAmountInCents((previous) => Math.min(previous + item.amountInCents, 99_999_999)); setDescription((previous) => previous || item.name); popAmount(); amountRef.current?.focus(); };
   const quickAmounts = [500, 1000, 2000, 5000, 10000];
 
   const loadCharge = useCallback(async (publicId: string) => {
@@ -357,6 +361,16 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
           required
           aria-label="Valor da venda em reais"
         />
+        {quickItems.length > 0 && (
+          <div className="quick-catalog" role="group" aria-label="Catálogo rápido">
+            {quickItems.map((item, index) => (
+              <button type="button" key={`${item.name}-${index}`} className="quick-catalog-item" onClick={() => pickQuickItem(item)}>
+                <span>{item.name}</span>
+                <strong>{moneyFormatter.format(item.amountInCents / 100)}</strong>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="amount-chips" role="group" aria-label="Adicionar valores rápidos">
           {quickAmounts.map((cents) => (
             <button type="button" key={cents} className="amount-chip" onClick={() => addAmount(cents)}>
