@@ -24,6 +24,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { BrandMark } from "./brand-mark";
 import { LogoutButton } from "./logout-button";
 import { ThemeToggle } from "./theme-toggle";
+import { Toaster } from "./toaster";
 
 interface NavItem {
   href: string;
@@ -236,6 +237,7 @@ export function AppShell({ principal, currentCash, children }: { principal: Sess
         </header>
         <main id="conteudo-principal">{children}</main>
       </div>
+      <Toaster />
     </div>
   );
 }

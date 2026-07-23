@@ -1245,6 +1245,33 @@ a {
 .team-cash-stats dt { font-size: 0.72rem; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; }
 .team-cash-stats dd { margin: 2px 0 0; font-weight: 700; font-size: 0.98rem; }
 
+/* Toasts (avisos flutuantes). */
+.toaster { position: fixed; bottom: 20px; right: 20px; z-index: 60; display: flex; flex-direction: column; gap: 10px; max-width: min(92vw, 380px); }
+.toast { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg); font-size: 0.9rem; font-weight: 600; color: var(--ink); animation: toast-in 0.28s var(--ease-spring) both; }
+.toast span { flex: 1; }
+.toast button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; color: var(--ink-faint); }
+.toast button:hover { background: var(--surface-muted); color: var(--ink); }
+.toast-success { border-color: color-mix(in srgb, var(--success) 40%, var(--border)); }
+.toast-success > svg:first-child { color: var(--success); }
+.toast-error { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.toast-error > svg:first-child { color: var(--danger); }
+.toast-info > svg:first-child { color: var(--primary); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: none; } }
+@media (max-width: 520px) {
+  .toaster { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+  /* Balcão em celular: teclas e botões maiores para o toque. */
+  .keypad-key { min-height: 56px; font-size: 1.15rem; }
+  .amount-input { font-size: 1.9rem !important; }
+  .pix-action-grid { grid-template-columns: 1fr; }
+}
+
+/* Skeletons de carregamento. */
+.skeleton-block, .skeleton-card { position: relative; overflow: hidden; border-radius: 10px; background: color-mix(in srgb, var(--ink) 8%, var(--surface-muted)); }
+.skeleton-card { height: 118px; border-radius: 16px; }
+.skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+.skeleton-block::after, .skeleton-card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 60%, transparent), transparent); animation: skeleton-shine 1.3s ease-in-out infinite; }
+@keyframes skeleton-shine { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
 /* Fila de estornos pendentes (gestão admin). */
 .refund-queue { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
 .refund-queue-card { display: flex; flex-direction: column; gap: 12px; animation: reveal-up 0.3s var(--ease-out) both; }

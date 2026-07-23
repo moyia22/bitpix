@@ -4,6 +4,7 @@ import { Check, LoaderCircle, Undo2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "@/components/toaster";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -38,6 +39,7 @@ export function RefundQueue({ initial }: { initial: RefundRow[] }) {
       const response = await fetch(`${apiUrl}/api/v1/pix/refunds/${publicId}/${action}`, { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify({}) });
       if (!response.ok) { const body = await response.json().catch(() => null) as { error?: { message?: string } } | null; throw new Error(body?.error?.message ?? "Não foi possível concluir."); }
       setRows((current) => current.filter((row) => row.publicId !== publicId));
+      toast(action === "approve" ? "Estorno aprovado e enviado ao Mercado Pago." : "Solicitação de estorno negada.", action === "approve" ? "success" : "info");
       router.refresh();
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Falha ao decidir o estorno."); } finally { setBusyId(null); }
   };

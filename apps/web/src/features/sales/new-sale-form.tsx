@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { PrintReceipt } from "@/components/print-receipt";
+import { toast } from "@/components/toaster";
 
 const moneyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3333";
@@ -125,8 +126,10 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
   }, [chargePublicId, chargeStatus, loadCharge]);
 
   useEffect(() => {
-    if (!charge || charge.status !== "PAID" || confirmationPlayedRef.current === charge.publicId || !charge.companyPaymentSoundEnabled) return;
+    if (!charge || charge.status !== "PAID" || confirmationPlayedRef.current === charge.publicId) return;
     confirmationPlayedRef.current = charge.publicId;
+    toast(`Pagamento confirmado — ${moneyFormatter.format(Number(charge.receivedAmount ?? charge.amount))}`, "success");
+    if (!charge.companyPaymentSoundEnabled) return;
     if (window.localStorage.getItem("bitpix-payment-sound") === "off") return;
     try {
       const AudioContextClass = window.AudioContext;
@@ -166,7 +169,7 @@ export function NewSaleForm({ currentCash, readiness, automation }: { currentCas
     if (!charge?.qrCodeText) return;
     await navigator.clipboard.writeText(charge.qrCodeText);
     await fetch(`${apiUrl}/api/v1/pix/charges/${charge.publicId}/copy`, { method: "POST", credentials: "include" });
-    setCopied(true); window.setTimeout(() => setCopied(false), 2_000);
+    setCopied(true); toast("Código Pix copiado para a área de transferência.", "success"); window.setTimeout(() => setCopied(false), 2_000);
   };
 
   const cancelCharge = async () => {
