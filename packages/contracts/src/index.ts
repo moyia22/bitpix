@@ -27,6 +27,7 @@ export const permissionKeys = [
   "cash.register.update",
   "cash.register.disable",
   "cash.session.open",
+  "cash.session.open.any",
   "cash.session.read",
   "cash.session.close",
   "cash.session.close.with_pending_charges",
@@ -191,12 +192,14 @@ export const cashRegisterCreateSchema = z.object({
   name: z.string().trim().min(2, "Informe o nome do caixa").max(100),
   code: z.string().trim().min(1).max(30).regex(/^[A-Za-z0-9_-]+$/, "Use letras, números, hífen ou sublinhado"),
   description: z.string().trim().max(240).nullable().optional(),
+  ownerUserPublicId: z.uuid("Informe o dono do caixa"),
 });
 
 export const cashRegisterUpdateSchema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
   code: z.string().trim().min(1).max(30).regex(/^[A-Za-z0-9_-]+$/).optional(),
   description: z.string().trim().max(240).nullable().optional(),
+  ownerUserPublicId: z.uuid().optional(),
 }).refine((body) => Object.keys(body).length > 0, "Informe ao menos um campo");
 
 export const openCashSessionSchema = z.object({
@@ -367,6 +370,7 @@ export interface CashRegisterDto {
   description: string | null;
   status: "ACTIVE" | "INACTIVE";
   branch: { publicId: string; code: string; name: string };
+  owner: { publicId: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
 }
