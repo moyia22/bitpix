@@ -5,7 +5,9 @@ export default defineConfig({
     fileParallelism: false,
     setupFiles: ["./tests/setup-env.ts"],
     // Integração contra o Supabase remoto + argon2 (hash intencionalmente lento):
-    // o teto padrão de 5s é apertado para fluxos que criam/removem usuários.
+    // os tetos padrão (5s teste / 10s hook) são apertados para fluxos que criam/removem
+    // usuários (agora com auto-provisionamento de caixa) e montam tenants no beforeAll.
     testTimeout: 20000,
+    hookTimeout: 30000,
   },
 });

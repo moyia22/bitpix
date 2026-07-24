@@ -44,12 +44,15 @@ describe.sequential("Mercado Pago e cobranças Pix", () => {
       await prisma.printJob.deleteMany({ where: { companyId } });
       await prisma.webhookAttempt.deleteMany({ where: { pixCharge: { companyId } } });
       await prisma.pixChargeStatusHistory.deleteMany({ where: { companyId } });
+      await prisma.pixPayment.deleteMany({ where: { companyId } });
       await prisma.pixCharge.deleteMany({ where: { companyId } });
       await prisma.sale.deleteMany({ where: { companyId } });
       await prisma.providerConfiguration.deleteMany({ where: { companyId } });
       await prisma.auditLog.deleteMany({ where: { companyId } });
       await prisma.cashMovement.deleteMany({ where: { companyId } });
-      await prisma.cashSession.deleteMany({ where: { companyId } });
+      // Rede de segurança: apaga qualquer sessão que referencie os caixas desta empresa,
+      // mesmo que a sessão tenha ficado com companyId divergente.
+      await prisma.cashSession.deleteMany({ where: { OR: [{ companyId }, { cashRegister: { companyId } }] } });
       await prisma.cashRegister.deleteMany({ where: { companyId } });
       await prisma.userSession.deleteMany({ where: { companyId } });
       await prisma.userRole.deleteMany({ where: { companyId } });
