@@ -78,7 +78,7 @@ export type PermissionKey = (typeof permissionKeys)[number];
 
 export const loginSchema = z.object({
   email: z.email("Informe um e-mail válido").transform((value) => value.trim().toLowerCase()),
-  password: z.string().min(8, "A senha deve ter ao menos 8 caracteres").max(128),
+  password: z.string().min(6, "A senha deve ter ao menos 6 caracteres").max(128),
   mfaCode: z.string().trim().regex(/^\d{6}$/).optional(),
   recoveryCode: z.string().trim().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/).optional(),
 });
@@ -87,7 +87,7 @@ export const passwordConfirmationSchema = z.object({ password: z.string().min(8)
 export const mfaCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
 export const mfaDisableSchema = z.object({ password: z.string().min(8).max(128), code: z.string().trim().regex(/^\d{6}$/) });
 export const forgotPasswordSchema = z.object({ email: z.email().transform((value) => value.trim().toLowerCase()) });
-export const resetPasswordSchema = z.object({ token: z.string().min(32).max(256), password: z.string().min(12).max(128) });
+export const resetPasswordSchema = z.object({ token: z.string().min(32).max(256), password: z.string().min(6).max(128) });
 
 export const createBranchSchema = z.object({
   code: z.string().trim().min(1).max(20).regex(/^[A-Za-z0-9_-]+$/),
@@ -108,7 +108,7 @@ export const updateBranchSchema = z.object({
 export const createUserSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.email().transform((value) => value.trim().toLowerCase()),
-  password: z.string().min(12).max(128),
+  password: z.string().min(6).max(128),
   branchPublicId: z.uuid().nullable().optional(),
   roleKeys: z.array(z.string().trim().min(1).max(50)).min(1),
   requirePasswordChange: z.boolean().optional(),
@@ -124,7 +124,7 @@ export const updateUserSchema = z.object({
 }).refine((body) => Object.keys(body).length > 0, "Informe ao menos um campo");
 
 export const setPasswordSchema = z.object({
-  password: z.string().min(12).max(128),
+  password: z.string().min(6).max(128),
   requirePasswordChange: z.boolean().optional(),
   mfaCode: z.string().trim().regex(/^\d{6}$/),
 });
@@ -138,8 +138,8 @@ export const resetMfaSchema = z.object({
 });
 
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(8).max(128),
-  newPassword: z.string().min(12).max(128),
+  currentPassword: z.string().min(6).max(128),
+  newPassword: z.string().min(6).max(128),
 });
 
 export const roleUpsertSchema = z.object({

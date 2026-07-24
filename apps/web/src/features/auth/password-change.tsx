@@ -49,8 +49,8 @@ export function PasswordChange({ forced }: { forced?: boolean }) {
         <label className="field-label" htmlFor="current-password">Senha atual</label>
         <input id="current-password" className="field-input" type="password" name="currentPassword" autoComplete="current-password" required />
         <label className="field-label mt-5" htmlFor="new-password">Nova senha</label>
-        <input id="new-password" className="field-input" type="password" name="newPassword" minLength={12} autoComplete="new-password" required />
-        <p className="integration-help">Mínimo de 12 caracteres. As demais sessões serão encerradas.</p>
+        <input id="new-password" className="field-input" type="password" name="newPassword" minLength={6} autoComplete="new-password" required />
+        <p className="integration-help">Mínimo de 6 caracteres. As demais sessões serão encerradas.</p>
         {error && <div className="cash-notice cash-notice-error mt-3" role="alert">{error}</div>}
         {done && <div className="cash-notice cash-notice-success mt-3" role="status">Senha alterada. Redirecionando…</div>}
         <button className="primary-button mt-6 w-full" disabled={busy || done}>

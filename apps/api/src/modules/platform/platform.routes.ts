@@ -9,7 +9,7 @@ import { authenticate, requirePermission } from "../auth/auth.guard.js";
 import { queueHealth as exportQueueHealth } from "../reports/export-queue.js";
 import { webhookQueueCounts } from "../payments/webhook-queue.js";
 
-const companySchema = z.object({ displayName: z.string().trim().min(2).max(120), legalName: z.string().trim().min(2).max(180), slug: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/), timezone: z.string().trim().min(3).max(80), planPublicId: z.uuid(), adminName: z.string().trim().min(2).max(120), adminEmail: z.email().transform((v) => v.toLowerCase()), adminPassword: z.string().min(12).max(128) });
+const companySchema = z.object({ displayName: z.string().trim().min(2).max(120), legalName: z.string().trim().min(2).max(180), slug: z.string().trim().min(2).max(80).regex(/^[a-z0-9-]+$/), timezone: z.string().trim().min(3).max(80), planPublicId: z.uuid(), adminName: z.string().trim().min(2).max(120), adminEmail: z.email().transform((v) => v.toLowerCase()), adminPassword: z.string().min(6).max(128) });
 const listQuery = z.object({ page: z.coerce.number().int().positive().default(1), pageSize: z.coerce.number().int().min(1).max(100).default(20), search: z.string().trim().max(120).optional(), status: z.nativeEnum(CompanyStatus).optional() });
 async function platformOnly(request: FastifyRequest, reply: FastifyReply) { await authenticate(request, reply); const user = await prisma.user.findUnique({ where: { id: request.auth!.userId }, select: { isPlatformAdmin: true } }); if (!user?.isPlatformAdmin) throw forbidden(); }
 

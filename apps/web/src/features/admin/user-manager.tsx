@@ -196,7 +196,7 @@ export function UserManager({
         <form className="card inline-create user-create" onSubmit={create}>
           <label><span>Nome</span><input name="name" required /></label>
           <label><span>E-mail</span><input type="email" name="email" required /></label>
-          <label><span>Senha inicial</span><input type="password" name="password" minLength={12} required /></label>
+          <label><span>Senha inicial</span><input type="password" name="password" minLength={6} required /></label>
           <label><span>Filial</span><select name="branch"><option value="">Todas</option>{branches.map((branch) => <option value={branch.publicId} key={branch.publicId}>{branch.name}</option>)}</select></label>
           <label><span>Função</span><select name="role" required>{roles.map((role) => <option value={role.key} key={role.key}>{role.name}</option>)}</select></label>
           <label className="check-row" style={{ gridColumn: "1 / -1" }}><input type="checkbox" name="requireChange" /> Exigir troca de senha no 1º login</label>
@@ -265,7 +265,7 @@ export function UserManager({
               <button type="button" onClick={() => setPasswordUser(null)} aria-label="Fechar" style={{ border: 0, background: "transparent", color: "var(--ink-muted)" }}><X size={18} /></button>
             </div>
             <label className="field-label mt-5" htmlFor="pw-new">Nova senha</label>
-            <input id="pw-new" className="field-input" type="password" name="password" minLength={12} required autoComplete="new-password" />
+            <input id="pw-new" className="field-input" type="password" name="password" minLength={6} required autoComplete="new-password" />
             <label className="check-row mt-3"><input type="checkbox" name="requireChange" /> Exigir troca no 1º login</label>
             <label className="field-label mt-5" htmlFor="pw-code">Seu código de 2FA</label>
             <input id="pw-code" className="field-input" name="mfaCode" inputMode="numeric" pattern="\d{6}" maxLength={6} required autoComplete="one-time-code" />
