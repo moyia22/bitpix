@@ -11,9 +11,13 @@ describe.sequential("controle operacional de caixa", () => {
   const foreignSlug = `cash-foreign-${suffix}`;
   const adminToken = `cash-admin-${randomUUID()}`;
   const deniedToken = `cash-denied-${randomUUID()}`;
+  const ownerToken = `cash-owner-${randomUUID()}`;
+  const plainOperatorToken = `cash-plain-${randomUUID()}`;
   const cookieName = process.env.SESSION_COOKIE_NAME ?? "bitpix_session";
   const adminCookie = `${cookieName}=${adminToken}`;
   const deniedCookie = `${cookieName}=${deniedToken}`;
+  const ownerCookie = `${cookieName}=${ownerToken}`;
+  const plainOperatorCookie = `${cookieName}=${plainOperatorToken}`;
   let app: Awaited<ReturnType<typeof buildApp>>;
   let companyId = "";
   let branchId = "";
@@ -23,6 +27,9 @@ describe.sequential("controle operacional de caixa", () => {
   let currentSessionPublicId = "";
   let foreignCompanyId = "";
   let foreignRegisterPublicId = "";
+  let ownerUserPublicId = "";
+  let secondOwnerPublicId = "";
+  let thirdOwnerId = "";
 
   beforeAll(async () => {
     app = await buildApp();
@@ -76,6 +83,71 @@ describe.sequential("controle operacional de caixa", () => {
       },
     });
 
+    const ownerUser = await prisma.user.create({
+      data: {
+        companyId,
+        branchId,
+        name: "Dono do Caixa",
+        email: `cash-owner-${suffix}@bitpix.test`,
+        normalizedEmail: `cash-owner-${suffix}@bitpix.test`,
+        passwordHash: "not-used",
+      },
+    });
+    ownerUserPublicId = ownerUser.publicId;
+
+    const secondOwner = await prisma.user.create({
+      data: {
+        companyId,
+        branchId,
+        name: "Segundo Dono",
+        email: `cash-second-owner-${suffix}@bitpix.test`,
+        normalizedEmail: `cash-second-owner-${suffix}@bitpix.test`,
+        passwordHash: "not-used",
+      },
+    });
+    secondOwnerPublicId = secondOwner.publicId;
+
+    const thirdOwner = await prisma.user.create({
+      data: {
+        companyId,
+        branchId,
+        name: "Terceiro Dono",
+        email: `cash-third-owner-${suffix}@bitpix.test`,
+        normalizedEmail: `cash-third-owner-${suffix}@bitpix.test`,
+        passwordHash: "not-used",
+      },
+    });
+    thirdOwnerId = thirdOwner.id;
+
+    const openOnlyRole = await prisma.role.create({
+      data: { companyId, key: "CASH_OPEN_ONLY", name: "Operador dono" },
+    });
+    const openPerm = await prisma.permission.findUniqueOrThrow({ where: { key: "cash.session.open" } });
+    const closePerm = await prisma.permission.findUniqueOrThrow({ where: { key: "cash.session.close" } });
+    const readPerm = await prisma.permission.findUniqueOrThrow({ where: { key: "cash.session.read" } });
+    await prisma.rolePermission.createMany({
+      data: [openPerm, closePerm, readPerm].map((permission) => ({ companyId, roleId: openOnlyRole.id, permissionId: permission.id })),
+    });
+    await prisma.userRole.create({ data: { companyId, userId: ownerUser.id, roleId: openOnlyRole.id } });
+    await prisma.userSession.create({
+      data: { companyId, userId: ownerUser.id, tokenHash: hashSessionToken(ownerToken), expiresAt: new Date(Date.now() + 3_600_000) },
+    });
+
+    const plainOperator = await prisma.user.create({
+      data: {
+        companyId,
+        branchId,
+        name: "Operador Sem Caixa",
+        email: `cash-plain-${suffix}@bitpix.test`,
+        normalizedEmail: `cash-plain-${suffix}@bitpix.test`,
+        passwordHash: "not-used",
+      },
+    });
+    await prisma.userRole.create({ data: { companyId, userId: plainOperator.id, roleId: openOnlyRole.id } });
+    await prisma.userSession.create({
+      data: { companyId, userId: plainOperator.id, tokenHash: hashSessionToken(plainOperatorToken), expiresAt: new Date(Date.now() + 3_600_000) },
+    });
+
     const deniedRole = await prisma.role.create({
       data: { companyId, key: "NO_CASH", name: "Sem acesso ao caixa" },
     });
@@ -106,11 +178,21 @@ describe.sequential("controle operacional de caixa", () => {
     const foreignBranch = await prisma.branch.create({
       data: { companyId: foreignCompany.id, code: "EXT", name: "Filial Externa" },
     });
+    const foreignOwner = await prisma.user.create({
+      data: {
+        companyId: foreignCompany.id,
+        branchId: foreignBranch.id,
+        name: "Dono Externo",
+        email: `cash-foreign-owner-${suffix}@bitpix.test`,
+        normalizedEmail: `cash-foreign-owner-${suffix}@bitpix.test`,
+        passwordHash: "not-used",
+      },
+    });
     const foreignRegister = await prisma.cashRegister.create({
-      data: { companyId: foreignCompany.id, branchId: foreignBranch.id, code: "EXT-01", name: "Caixa externo" },
+      data: { companyId: foreignCompany.id, branchId: foreignBranch.id, code: "EXT-01", name: "Caixa externo", ownerUserId: foreignOwner.id },
     });
     foreignRegisterPublicId = foreignRegister.publicId;
-  });
+  }, 30_000);
 
   afterAll(async () => {
     for (const id of [companyId, foreignCompanyId]) {
@@ -129,17 +211,29 @@ describe.sequential("controle operacional de caixa", () => {
       await prisma.company.delete({ where: { id } });
     }
     await app.close();
-  });
+  }, 30_000);
 
-  it("cadastra um caixa dentro da filial acessível", async () => {
+  it("cadastra um caixa com dono dentro da filial acessível", async () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/cash-registers",
       headers: { cookie: adminCookie },
-      payload: { branchPublicId, code: "CX-TESTE", name: "Caixa de testes", description: "Integração" },
+      payload: { branchPublicId, code: "CX-TESTE", name: "Caixa de testes", description: "Integração", ownerUserPublicId },
     });
     expect(response.statusCode).toBe(201);
+    expect(response.json().data.owner).toMatchObject({ publicId: ownerUserPublicId, name: "Dono do Caixa" });
     registerPublicId = response.json().data.publicId;
+  });
+
+  it("recusa cadastro de segundo caixa para o mesmo dono", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/cash-registers",
+      headers: { cookie: adminCookie },
+      payload: { branchPublicId, code: "CX-DUP-OWNER", name: "Outro", ownerUserPublicId },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: "CASH_REGISTER_OWNER_TAKEN" } });
   });
 
   it("impede código duplicado na mesma empresa e filial", async () => {
@@ -147,7 +241,7 @@ describe.sequential("controle operacional de caixa", () => {
       method: "POST",
       url: "/api/v1/cash-registers",
       headers: { cookie: adminCookie },
-      payload: { branchPublicId, code: "cx-teste", name: "Duplicado" },
+      payload: { branchPublicId, code: "cx-teste", name: "Duplicado", ownerUserPublicId: secondOwnerPublicId },
     });
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ error: { code: "CASH_REGISTER_CODE_EXISTS" } });
@@ -158,7 +252,7 @@ describe.sequential("controle operacional de caixa", () => {
       method: "POST",
       url: "/api/v1/cash-registers",
       headers: { cookie: adminCookie },
-      payload: { branchPublicId, code: "CX-SECOND", name: "Segundo caixa" },
+      payload: { branchPublicId, code: "CX-SECOND", name: "Segundo caixa", ownerUserPublicId: secondOwnerPublicId },
     });
     expect(response.statusCode).toBe(201);
     secondRegisterPublicId = response.json().data.publicId;
@@ -166,7 +260,7 @@ describe.sequential("controle operacional de caixa", () => {
 
   it("impede abertura de caixa inativo", async () => {
     const inactive = await prisma.cashRegister.create({
-      data: { companyId, branchId, code: "CX-OFF", name: "Caixa inativo", status: CashRegisterStatus.INACTIVE },
+      data: { companyId, branchId, code: "CX-OFF", name: "Caixa inativo", status: CashRegisterStatus.INACTIVE, ownerUserId: thirdOwnerId },
     });
     const response = await app.inject({
       method: "POST",
@@ -337,6 +431,53 @@ describe.sequential("controle operacional de caixa", () => {
     expect(response.statusCode).toBe(404);
     const audit = await prisma.auditLog.findFirst({ where: { companyId, action: "tenant.access.denied", entityPublicId: foreignRegisterPublicId } });
     expect(audit).not.toBeNull();
+  });
+
+  it("permite o dono abrir o próprio caixa", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/cash-sessions/open",
+      headers: { cookie: ownerCookie },
+      payload: { cashRegisterPublicId: registerPublicId, openingBalanceInCents: 5000 },
+    });
+    expect(response.statusCode).toBe(201);
+    // fecha para não interferir nos próximos testes
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/cash-sessions/${response.json().data.publicId}/close`,
+      headers: { cookie: ownerCookie },
+      payload: { countedBalanceInCents: 5000, note: null, confirmed: true },
+    });
+  });
+
+  it("bloqueia não-dono sem permissão de override", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/cash-sessions/open",
+      headers: { cookie: plainOperatorCookie },
+      payload: { cashRegisterPublicId: registerPublicId, openingBalanceInCents: 0 },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ error: { code: "CASH_REGISTER_NOT_OWNER" } });
+  });
+
+  it("permite admin com override abrir caixa de outro dono e audita", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/cash-sessions/open",
+      headers: { cookie: adminCookie },
+      payload: { cashRegisterPublicId: registerPublicId, openingBalanceInCents: 0 },
+    });
+    expect(response.statusCode).toBe(201);
+    const audit = await prisma.auditLog.findFirst({ where: { companyId, action: "cash.session.opened.override" } });
+    expect(audit).not.toBeNull();
+    // fecha para não deixar sessão residual aberta para os testes seguintes
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/cash-sessions/${response.json().data.publicId}/close`,
+      headers: { cookie: adminCookie },
+      payload: { countedBalanceInCents: 0, confirmed: true },
+    });
   });
 
   it("cria auditoria para todas as operações financeiras sensíveis", async () => {
