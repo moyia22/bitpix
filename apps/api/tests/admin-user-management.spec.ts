@@ -133,21 +133,33 @@ describe.sequential("gestão de usuários e 2FA (tenant isolado)", () => {
       expect(restore.statusCode).toBe(204);
     });
 
-    it("exclui de vez um usuário sem histórico", async () => {
-      const created = await app.inject({ method: "POST", url: "/api/v1/users", headers: { cookie: adminCookie }, payload: { name: "Descartável", email: `descartavel-${tenant.suffix}@test.local`, password: "SenhaDescartavel1", roleKeys: ["OPERATOR"] } });
+    it("provisiona um caixa dedicado ao criar um usuário", async () => {
+      const created = await app.inject({ method: "POST", url: "/api/v1/users", headers: { cookie: adminCookie }, payload: { name: "Com Caixa", email: `comcaixa-${tenant.suffix}@test.local`, password: "SenhaComCaixa1", roleKeys: ["OPERATOR"] } });
       expect(created.statusCode).toBe(201);
       const publicId = (created.json() as { data: { publicId: string } }).data.publicId;
+      const dbUser = await prisma.user.findUniqueOrThrow({ where: { publicId } });
+      const register = await prisma.cashRegister.findFirst({ where: { ownerUserId: dbUser.id } });
+      expect(register).not.toBeNull();
+      expect(register!.name).toContain("Com Caixa");
+      // exclusão remove o caixa (sem histórico) e anonimiza o usuário
       const removed = await app.inject({ method: "DELETE", url: `/api/v1/users/${publicId}`, headers: { cookie: adminCookie }, payload: { mfaCode: totp(secret) } });
       expect(removed.statusCode).toBe(200);
       expect((removed.json() as { data: { deleted: boolean } }).data.deleted).toBe(true);
+      expect(await prisma.cashRegister.count({ where: { id: register!.id } })).toBe(0);
     });
 
-    it("desativa (não exclui) um usuário com histórico", async () => {
+    it("anonimiza (remove) um usuário e preserva o histórico", async () => {
       const removed = await app.inject({ method: "DELETE", url: `/api/v1/users/${tenant.operatorPublicId}`, headers: { cookie: adminCookie }, payload: { mfaCode: totp(secret) } });
       expect(removed.statusCode).toBe(200);
-      expect((removed.json() as { data: { deactivated: boolean } }).data.deactivated).toBe(true);
-      const reactivated = await app.inject({ method: "PATCH", url: `/api/v1/users/${tenant.operatorPublicId}`, headers: { cookie: adminCookie }, payload: { status: "ACTIVE" } });
-      expect(reactivated.statusCode).toBe(200);
+      expect((removed.json() as { data: { deleted: boolean } }).data.deleted).toBe(true);
+      const anonymized = await prisma.user.findUniqueOrThrow({ where: { id: tenant.operatorId }, select: { name: true, status: true, normalizedEmail: true, mfaEnabled: true } });
+      expect(anonymized.name).toBe("Usuário removido");
+      expect(anonymized.status).toBe("INACTIVE");
+      expect(anonymized.normalizedEmail).toContain("@removed.invalid");
+      expect(anonymized.mfaEnabled).toBe(false);
+      // não consegue mais entrar com o e-mail antigo
+      const login = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: tenant.operatorEmail, password: tenant.password } });
+      expect(login.statusCode).toBe(401);
     });
 
     it("bloqueia auto-exclusão", async () => {

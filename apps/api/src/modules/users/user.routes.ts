@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { createUserSchema, deleteUserSchema, paginationSchema, resetMfaSchema, setPasswordSchema, updateUserSchema } from "@bitpix/contracts";
-import { prisma } from "@bitpix/database";
+import { CashRegisterStatus, Prisma, prisma } from "@bitpix/database";
 import argon2 from "argon2";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -11,6 +12,33 @@ import { enforceCompanyLimit } from "../platform/plan-limits.js";
 
 const userQuery = paginationSchema.extend({ search: z.string().trim().max(120).optional(), status: z.enum(["ACTIVE", "INACTIVE", "BLOCKED"]).optional(), branchPublicId: z.uuid().optional() });
 const userSelection = { publicId: true, name: true, email: true, status: true, mfaEnabled: true, mustResetPassword: true, lastLoginAt: true, createdAt: true, branch: { select: { publicId: true, name: true } }, roles: { select: { role: { select: { publicId: true, key: true, name: true } } } }, _count: { select: { sessions: { where: { revokedAt: null } } } } } as const;
+
+// Cada usuário tem um caixa próprio (1:1). Resolve a filial do caixa: a do usuário
+// ou a primeira filial ativa da empresa. Falha explicitamente se não houver filial.
+async function resolveCashBranchId(tx: Prisma.TransactionClient, companyId: string, userBranchId: string | null): Promise<string> {
+  if (userBranchId) return userBranchId;
+  const branch = await tx.branch.findFirst({ where: { companyId, active: true }, orderBy: { createdAt: "asc" }, select: { id: true } });
+  if (!branch) throw new AppError(409, "NO_ACTIVE_BRANCH", "Cadastre uma filial ativa antes de criar usuários (cada usuário recebe um caixa).");
+  return branch.id;
+}
+
+// Gera um código de caixa único dentro da filial (CX-1, CX-2, ...).
+async function generateRegisterCode(tx: Prisma.TransactionClient, companyId: string, branchId: string): Promise<string> {
+  const base = await tx.cashRegister.count({ where: { companyId, branchId } });
+  for (let i = 1; i <= 200; i += 1) {
+    const code = `CX-${base + i}`;
+    const taken = await tx.cashRegister.findFirst({ where: { companyId, branchId, code }, select: { id: true } });
+    if (!taken) return code;
+  }
+  return `CX-${randomUUID().slice(0, 6).toUpperCase()}`;
+}
+
+// Provisiona o caixa dedicado de um usuário recém-criado (dono 1:1).
+async function provisionUserCashRegister(tx: Prisma.TransactionClient, companyId: string, user: { id: string; name: string; branchId: string | null }): Promise<void> {
+  const branchId = await resolveCashBranchId(tx, companyId, user.branchId);
+  const code = await generateRegisterCode(tx, companyId, branchId);
+  await tx.cashRegister.create({ data: { companyId, branchId, code, name: `Caixa de ${user.name}`.slice(0, 100), ownerUserId: user.id } });
+}
 
 export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.get("/users", { preHandler: requireAnyPermission("users.read", "users.manage") }, async (request) => {
@@ -31,7 +59,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const [branch, roles] = await Promise.all([body.branchPublicId ? prisma.branch.findFirst({ where: { publicId: body.branchPublicId, companyId: auth.companyId, active: true } }) : null, prisma.role.findMany({ where: { companyId: auth.companyId, key: { in: body.roleKeys }, active: true } })]);
     if (body.branchPublicId && !branch) throw new AppError(400, "BRANCH_INVALID", "A filial informada não pertence à empresa."); if (roles.length !== new Set(body.roleKeys).size) throw new AppError(400, "ROLE_INVALID", "Uma ou mais funções são inválidas.");
     const passwordHash = await argon2.hash(body.password, { type: argon2.argon2id });
-    const user = await prisma.$transaction(async (tx) => { const created = await tx.user.create({ data: { companyId: auth.companyId, branchId: branch?.id ?? null, name: body.name, email: body.email, normalizedEmail: body.email, passwordHash, mustResetPassword: body.requirePasswordChange ?? false } }); await tx.userRole.createMany({ data: roles.map((role) => ({ companyId: auth.companyId, userId: created.id, roleId: role.id })) }); await writeAudit({ request, client: tx, action: "user.created", entity: "User", entityPublicId: created.publicId, after: { name: created.name, email: created.email, roles: roles.map((role) => role.key) } }); return created; });
+    const user = await prisma.$transaction(async (tx) => { const created = await tx.user.create({ data: { companyId: auth.companyId, branchId: branch?.id ?? null, name: body.name, email: body.email, normalizedEmail: body.email, passwordHash, mustResetPassword: body.requirePasswordChange ?? false } }); await tx.userRole.createMany({ data: roles.map((role) => ({ companyId: auth.companyId, userId: created.id, roleId: role.id })) }); await provisionUserCashRegister(tx, auth.companyId, created); await writeAudit({ request, client: tx, action: "user.created", entity: "User", entityPublicId: created.publicId, after: { name: created.name, email: created.email, roles: roles.map((role) => role.key) } }); return created; });
     return reply.status(201).send({ data: { publicId: user.publicId, name: user.name, email: user.email, status: user.status } });
   });
 
@@ -72,41 +100,38 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     if (!user) throw new AppError(404, "USER_NOT_FOUND", "Usuário não encontrado.");
     if (user.id === auth.userId) throw new AppError(409, "SELF_DELETE_FORBIDDEN", "Você não pode excluir a própria conta.");
 
-    const deactivate = async () => {
-      await prisma.$transaction(async (tx) => {
-        await tx.user.update({ where: { id: user.id }, data: { status: "INACTIVE" } });
-        await tx.userSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
-        await writeAudit({ request, client: tx, action: "user.deactivated", entity: "User", entityPublicId: user.publicId, metadata: { reason: "delete_with_history" } });
+    // Exclusão = anonimização. O histórico financeiro/auditoria é preservado (referências
+    // permanecem apontando para este registro anonimizado), mas a identidade, o acesso e o
+    // caixa do usuário são removidos. O caixa é apagado se não tiver histórico; caso contrário,
+    // fica sem dono e inativo (preserva as sessões passadas).
+    const deadHash = await argon2.hash(randomUUID(), { type: argon2.argon2id });
+    const owned = await prisma.cashRegister.findFirst({ where: { ownerUserId: user.id }, select: { id: true } });
+    await prisma.$transaction(async (tx) => {
+      if (owned) {
+        const sessionCount = await tx.cashSession.count({ where: { cashRegisterId: owned.id } });
+        if (sessionCount === 0) await tx.cashRegister.delete({ where: { id: owned.id } });
+        else await tx.cashRegister.update({ where: { id: owned.id }, data: { ownerUserId: null, status: CashRegisterStatus.INACTIVE } });
+      }
+      await tx.userRole.deleteMany({ where: { userId: user.id } });
+      await tx.mfaRecoveryCode.deleteMany({ where: { userId: user.id } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: user.id } });
+      await tx.userSession.deleteMany({ where: { userId: user.id } });
+      const tombstone = `removed+${user.publicId}@removed.invalid`;
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          name: "Usuário removido",
+          email: tombstone,
+          normalizedEmail: tombstone,
+          passwordHash: deadHash,
+          status: "INACTIVE",
+          mfaEnabled: false, mfaConfirmedAt: null, mfaSecretCiphertext: null, mfaSecretIv: null, mfaSecretAuthTag: null,
+          mustResetPassword: false, failedLoginAttempts: 0, lockedUntil: null,
+        },
       });
-      return { data: { deleted: false, deactivated: true } };
-    };
-
-    const [sales, sessions, movements, audits, providerConfigured, providerUpdated, exports, refunds] = await Promise.all([
-      prisma.sale.count({ where: { operatorId: user.id } }),
-      prisma.cashSession.count({ where: { operatorId: user.id } }),
-      prisma.cashMovement.count({ where: { createdByUserId: user.id } }),
-      prisma.auditLog.count({ where: { userId: user.id } }),
-      prisma.providerConfiguration.count({ where: { configuredByUserId: user.id } }),
-      prisma.providerConfiguration.count({ where: { updatedByUserId: user.id } }),
-      prisma.exportJob.count({ where: { requestedById: user.id } }),
-      prisma.pixRefund.count({ where: { requestedByUserId: user.id } }),
-    ]);
-    if (sales + sessions + movements + audits + providerConfigured + providerUpdated + exports + refunds > 0) return deactivate();
-
-    try {
-      await prisma.$transaction(async (tx) => {
-        await tx.userRole.deleteMany({ where: { userId: user.id } });
-        await tx.mfaRecoveryCode.deleteMany({ where: { userId: user.id } });
-        await tx.passwordResetToken.deleteMany({ where: { userId: user.id } });
-        await tx.userSession.deleteMany({ where: { userId: user.id } });
-        await writeAudit({ request, client: tx, action: "user.deleted", entity: "User", entityPublicId: user.publicId, before: { name: user.name, email: user.email } });
-        await tx.user.delete({ where: { id: user.id } });
-      });
-      return { data: { deleted: true, deactivated: false } };
-    } catch (error) {
-      if (error && typeof error === "object" && "code" in error && (error as { code?: string }).code === "P2003") return deactivate();
-      throw error;
-    }
+      await writeAudit({ request, client: tx, action: "user.deleted", entity: "User", entityPublicId: user.publicId, before: { name: user.name, email: user.email } });
+    });
+    return { data: { deleted: true, deactivated: false } };
   });
 
   app.post<{ Params: { publicId: string } }>("/users/:publicId/reset-mfa", { preHandler: requireAnyPermission("users.update", "users.manage") }, async (request) => {

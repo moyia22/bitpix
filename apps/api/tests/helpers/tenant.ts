@@ -73,6 +73,10 @@ export async function createTestTenant(prefix: string): Promise<TestTenant> {
       await prisma.userRole.deleteMany({ where: { companyId } });
       await prisma.rolePermission.deleteMany({ where: { companyId } });
       await prisma.role.deleteMany({ where: { companyId } });
+      // Caixas são auto-provisionados por usuário: limpar antes de users/branch (FK).
+      await prisma.cashMovement.deleteMany({ where: { companyId } });
+      await prisma.cashSession.deleteMany({ where: { companyId } });
+      await prisma.cashRegister.deleteMany({ where: { companyId } });
       await prisma.user.deleteMany({ where: { companyId } });
       await prisma.branch.deleteMany({ where: { companyId } });
       await prisma.companySetting.deleteMany({ where: { companyId } });
