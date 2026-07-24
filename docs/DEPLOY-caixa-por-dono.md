@@ -11,13 +11,23 @@ Branch: `feat/caixa-por-dono-senha`. Duas mudanças: senha mínima cai para 6, e
 1. **Deploy do app** (API + Web) com o código desta branch.
 2. **(Se sua VPS aplica migrações no boot)** `npm run deploy -w @bitpix/database` (= `prisma migrate deploy`) é idempotente — a migração já aplicada será apenas reconhecida.
 
-## Cutover obrigatório (pós-deploy) — atenção
+## Modelo atual: um caixa por usuário (automático)
 
-A migração é aditiva/nullable: **todos os caixas que já existiam ficam sem dono**. Com o novo enforcement, um operador comum (que tem `cash.session.open` mas não `cash.session.open.any`) recebe **403 `CASH_REGISTER_NOT_OWNER`** ao tentar abrir um caixa sem dono.
+- **Usuários novos**: ao criar um usuário, o sistema já cria o **caixa dedicado** dele (dono 1:1), na filial do usuário ou na primeira filial ativa da empresa.
+- **Cada usuário abre/vê só o próprio caixa**; quem tem a permissão `cash.session.open.any` (admin) enxerga e opera todos, pelo painel admin.
+- **Excluir usuário**: anonimiza a conta (nome "Usuário removido", e-mail/senha/2FA/funções limpos, sessões revogadas) e remove o caixa dele (ou libera+inativa se houver histórico). Vendas/pagamentos/auditoria são **preservados**.
 
-Portanto, antes de os operadores voltarem a operar:
+## Cutover obrigatório (pós-deploy): backfill dos usuários existentes
 
-- **Atribua um dono a cada caixa existente.** Pela tela de Caixa (admin), editar cada caixa e escolher o dono. Isso usa `cash.register.update` (admins já têm). Depois disso, o dono abre o próprio caixa normalmente — sem precisar de override.
+Os usuários que já existiam **antes** desta mudança ainda não têm caixa. Rode uma vez o backfill (idempotente, aditivo — cria o caixa de quem não tem, ignora quem já tem):
+
+```bash
+npm run backfill-caixas -w @bitpix/database
+```
+
+Depois disso, cada usuário abre o próprio caixa normalmente. Enquanto o backfill não roda, um usuário sem caixa não terá um caixa para abrir (e um operador comum não abre o de outro por causa do enforcement).
+
+> Observação: o `DATABASE_URL` aponta para o banco compartilhado; o backfill cria caixas para os usuários ativos de **todas as empresas** desse banco.
 
 ## Habilitar o override (`cash.session.open.any`) para tenants existentes — opcional
 
