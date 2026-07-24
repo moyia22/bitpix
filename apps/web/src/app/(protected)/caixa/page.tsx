@@ -43,9 +43,14 @@ export default async function CashPage() {
     ? await apiFetch<PaginatedDto<CashMovementDto>>(`/cash-sessions/${currentSession.publicId}/movements?page=1&pageSize=10`)
     : emptyMovements;
 
+  // Seletor de dono é um recurso secundário: seu carregamento NUNCA pode derrubar
+  // a página de caixa. pageSize respeita o máximo do contrato (50); qualquer falha
+  // degrada para lista vazia em vez de estourar a fronteira de erro.
   const canPickOwner = principal.permissions.includes("users.read") || principal.permissions.includes("users.manage");
   const owners = canPickOwner
-    ? (await apiFetch<PaginatedDto<UserOption>>("/users?pageSize=200")).data.map((u) => ({ publicId: u.publicId, name: u.name }))
+    ? await apiFetch<PaginatedDto<UserOption>>("/users?pageSize=50")
+        .then((res) => res.data.map((u) => ({ publicId: u.publicId, name: u.name })))
+        .catch(() => [] as UserOption[])
     : [];
 
   // Gestão admin: todas as sessões de caixa ABERTAS (visão da equipe para o
