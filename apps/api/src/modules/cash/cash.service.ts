@@ -18,6 +18,7 @@ export const cashRegisterSelect = {
   createdAt: true,
   updatedAt: true,
   branch: { select: { publicId: true, code: true, name: true } },
+  owner: { select: { publicId: true, name: true } },
 } as const;
 
 export const cashSessionInclude = {

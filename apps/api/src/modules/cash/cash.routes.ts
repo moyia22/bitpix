@@ -44,7 +44,12 @@ async function findScopedRegister(request: FastifyRequest, publicId: string) {
       companyId: auth.companyId,
       ...accessibleBranchWhere(auth.branchId),
     },
-    include: { branch: true },
+    select: {
+      id: true,
+      branchId: true,
+      ownerUserId: true,
+      ...cashRegisterSelect,
+    },
   });
   if (!cashRegister) {
     await auditScopedAccessDenied(request, "CashRegister", publicId);
@@ -81,6 +86,35 @@ async function auditClosedMovementAttempt(request: FastifyRequest, publicId: str
   });
 }
 
+async function resolveOwner(
+  request: FastifyRequest,
+  ownerUserPublicId: string,
+  branchId: string,
+  excludeRegisterId?: string,
+): Promise<{ id: string }> {
+  const auth = request.auth!;
+  const owner = await prisma.user.findFirst({
+    where: {
+      publicId: ownerUserPublicId,
+      companyId: auth.companyId,
+      status: "ACTIVE",
+      OR: [{ branchId: null }, { branchId }],
+    },
+    select: { id: true },
+  });
+  if (!owner) {
+    throw new AppError(400, "CASH_REGISTER_OWNER_INVALID", "O usuário informado não pode ser dono deste caixa.");
+  }
+  const existing = await prisma.cashRegister.findFirst({
+    where: { ownerUserId: owner.id, ...(excludeRegisterId ? { id: { not: excludeRegisterId } } : {}) },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new AppError(409, "CASH_REGISTER_OWNER_TAKEN", "Este usuário já é dono de outro caixa.");
+  }
+  return owner;
+}
+
 function registerResponse(register: {
   publicId: string;
   code: string;
@@ -90,6 +124,7 @@ function registerResponse(register: {
   createdAt: Date;
   updatedAt: Date;
   branch: { publicId: string; code: string; name: string };
+  owner: { publicId: string; name: string } | null;
 }) {
   return {
     ...register,
@@ -133,6 +168,8 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
       throw new AppError(400, "BRANCH_INVALID", "A filial informada não está disponível para este usuário.");
     }
 
+    const owner = await resolveOwner(request, body.ownerUserPublicId, branch.id);
+
     try {
       const register = await prisma.$transaction(async (tx) => {
         const created = await tx.cashRegister.create({
@@ -142,6 +179,7 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
             code: body.code.toUpperCase(),
             name: body.name,
             description: body.description || null,
+            ownerUserId: owner.id,
           },
           select: cashRegisterSelect,
         });
@@ -152,7 +190,7 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
           entity: "CashRegister",
           entityPublicId: created.publicId,
           branchId: branch.id,
-          after: { code: created.code, name: created.name, status: created.status },
+          after: { code: created.code, name: created.name, status: created.status, ownerUserPublicId: created.owner?.publicId ?? null },
         });
         return created;
       });
@@ -180,6 +218,9 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
     async (request) => {
       const body = cashRegisterUpdateSchema.parse(request.body);
       const register = await findScopedRegister(request, request.params.publicId);
+      const owner = body.ownerUserPublicId
+        ? await resolveOwner(request, body.ownerUserPublicId, register.branchId, register.id)
+        : null;
       try {
         const updated = await prisma.$transaction(async (tx) => {
           const result = await tx.cashRegister.update({
@@ -188,6 +229,7 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
               ...(body.name === undefined ? {} : { name: body.name }),
               ...(body.code === undefined ? {} : { code: body.code.toUpperCase() }),
               ...(body.description === undefined ? {} : { description: body.description || null }),
+              ...(owner ? { ownerUserId: owner.id } : {}),
             },
             select: cashRegisterSelect,
           });
@@ -266,6 +308,19 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
     const body = openCashSessionSchema.parse(request.body);
     const auth = request.auth!;
     const register = await findScopedRegister(request, body.cashRegisterPublicId);
+    const isOwner = register.ownerUserId === auth.userId;
+    const canOverride = auth.permissions.has("cash.session.open.any");
+    if (!isOwner && !canOverride) {
+      await writeAudit({
+        request,
+        action: "cash.session.open.denied.not_owner",
+        entity: "CashRegister",
+        entityPublicId: register.publicId,
+        outcome: AuditOutcome.FAILURE,
+        metadata: { ownerUserId: register.ownerUserId },
+      });
+      throw new AppError(403, "CASH_REGISTER_NOT_OWNER", "Este caixa pertence a outro usuário.");
+    }
     if (register.status !== CashRegisterStatus.ACTIVE) {
       throw new AppError(409, "CASH_REGISTER_INACTIVE", "Este caixa está inativo e não pode ser aberto.");
     }
@@ -318,6 +373,17 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
             openingBalance: moneyToString(openingBalance),
           },
         });
+        if (!isOwner) {
+          await writeAudit({
+            request,
+            client: tx,
+            action: "cash.session.opened.override",
+            entity: "CashSession",
+            entityPublicId: created.publicId,
+            branchId: register.branchId,
+            metadata: { ownerUserId: register.ownerUserId, openedByUserId: auth.userId },
+          });
+        }
         return created.publicId;
       }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
       const created = await findScopedSession(request, createdPublicId);

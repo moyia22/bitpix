@@ -30,6 +30,7 @@ const permissionCatalog = [
   ["cash.register.update", "Editar caixas", "Alterar dados de caixas físicos e terminais"],
   ["cash.register.disable", "Desativar caixas", "Desativar caixas sem excluir seu histórico"],
   ["cash.session.open", "Abrir caixa", "Iniciar uma sessão operacional de caixa"],
+  ["cash.session.open.any", "Abrir caixa de outro dono", "Override administrativo para abrir caixa que pertence a outro usuário"],
   ["cash.session.read", "Consultar sessões de caixa", "Consultar sessões e totais de caixa"],
   ["cash.session.close", "Fechar caixa", "Encerrar uma sessão operacional de caixa"],
   ["cash.session.close.with_pending_charges", "Fechar caixa com Pix pendente", "Autorizar exceção auditada de fechamento com cobranças pendentes"],
