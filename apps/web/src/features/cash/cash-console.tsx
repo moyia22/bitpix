@@ -35,6 +35,7 @@ interface CashConsoleProps {
   initialSession: CashSessionDto | null;
   initialMovements: PaginatedDto<CashMovementDto>;
   branches: BranchOption[];
+  owners: { publicId: string; name: string }[];
   permissions: PermissionKey[];
 }
 
@@ -93,6 +94,7 @@ export function CashConsole({
   initialSession,
   initialMovements,
   branches,
+  owners,
   permissions,
 }: CashConsoleProps) {
   const router = useRouter();
@@ -122,6 +124,7 @@ export function CashConsole({
   const [registerCode, setRegisterCode] = useState("");
   const [registerDescription, setRegisterDescription] = useState("");
   const [registerBranch, setRegisterBranch] = useState(branches.find((branch) => branch.active)?.publicId ?? "");
+  const [registerOwner, setRegisterOwner] = useState(owners[0]?.publicId ?? "");
 
   useEffect(() => {
     if (!session) return;
@@ -246,6 +249,7 @@ export function CashConsole({
           name: registerName,
           code: registerCode,
           description: registerDescription || null,
+          ownerUserPublicId: registerOwner,
         }),
       });
       setRegisters((current) => [...current, result.data].sort((a, b) => a.code.localeCompare(b.code)));
@@ -442,11 +446,12 @@ export function CashConsole({
             <div><label className="field-label" htmlFor="register-code">Código</label><input className="field-input" id="register-code" required maxLength={30} value={registerCode} onChange={(event) => setRegisterCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ""))} placeholder="CX-02" /></div>
             <div><label className="field-label" htmlFor="register-branch">Filial</label><select className="field-input" id="register-branch" required value={registerBranch} onChange={(event) => setRegisterBranch(event.target.value)}>{branches.filter((branch) => branch.active).map((branch) => <option value={branch.publicId} key={branch.publicId}>{branch.code} · {branch.name}</option>)}</select></div>
             <div><label className="field-label" htmlFor="register-description">Descrição</label><input className="field-input" id="register-description" maxLength={240} value={registerDescription} onChange={(event) => setRegisterDescription(event.target.value)} placeholder="Opcional" /></div>
-            <button className="primary-button" type="submit" disabled={busy}>Cadastrar caixa</button>
+            <div><label className="field-label" htmlFor="register-owner">Dono do caixa</label><select className="field-input" id="register-owner" required value={registerOwner} onChange={(event) => setRegisterOwner(event.target.value)}><option value="">Selecione o dono</option>{owners.map((owner) => <option value={owner.publicId} key={owner.publicId}>{owner.name}</option>)}</select></div>
+            <button className="primary-button" type="submit" disabled={busy || !registerOwner}>Cadastrar caixa</button>
           </form>
         )}
         <div className="cash-register-list">
-          {registers.map((register) => <article key={register.publicId}><span className="cash-register-icon"><Store size={18} /></span><div><strong>{register.name}</strong><small>{register.code} · {register.branch.name}</small></div><span className={register.status === "ACTIVE" ? "cash-status-active" : "cash-status-inactive"}>{register.status === "ACTIVE" ? "Ativo" : "Inativo"}</span>{register.status === "ACTIVE" && permissionSet.has("cash.register.disable") && <button type="button" disabled={busy || session?.cashRegister.publicId === register.publicId} onClick={() => void disableRegister(register)}>Desativar</button>}</article>)}
+          {registers.map((register) => <article key={register.publicId}><span className="cash-register-icon"><Store size={18} /></span><div><strong>{register.name}</strong><small>{register.code} · {register.branch.name}{register.owner ? ` · Dono: ${register.owner.name}` : " · Sem dono"}</small></div><span className={register.status === "ACTIVE" ? "cash-status-active" : "cash-status-inactive"}>{register.status === "ACTIVE" ? "Ativo" : "Inativo"}</span>{register.status === "ACTIVE" && permissionSet.has("cash.register.disable") && <button type="button" disabled={busy || session?.cashRegister.publicId === register.publicId} onClick={() => void disableRegister(register)}>Desativar</button>}</article>)}
         </div>
       </section>
     </div>

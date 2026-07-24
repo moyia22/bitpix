@@ -20,6 +20,11 @@ interface BranchOption {
   active: boolean;
 }
 
+interface UserOption {
+  publicId: string;
+  name: string;
+}
+
 const emptyMovements: PaginatedDto<CashMovementDto> = {
   data: [],
   pagination: { page: 1, pageSize: 10, total: 0, totalPages: 0 },
@@ -37,6 +42,11 @@ export default async function CashPage() {
   const movements = currentSession && principal.permissions.includes("cash.movement.read")
     ? await apiFetch<PaginatedDto<CashMovementDto>>(`/cash-sessions/${currentSession.publicId}/movements?page=1&pageSize=10`)
     : emptyMovements;
+
+  const canPickOwner = principal.permissions.includes("users.read") || principal.permissions.includes("users.manage");
+  const owners = canPickOwner
+    ? (await apiFetch<PaginatedDto<UserOption>>("/users?pageSize=200")).data.map((u) => ({ publicId: u.publicId, name: u.name }))
+    : [];
 
   // Gestão admin: todas as sessões de caixa ABERTAS (visão da equipe para o
   // fechamento). Quem só consulta o próprio caixa não vê este bloco.
@@ -85,6 +95,7 @@ export default async function CashPage() {
         initialSession={currentSession}
         initialMovements={movements}
         branches={branches}
+        owners={owners}
         permissions={principal.permissions}
       />
     </div>

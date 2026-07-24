@@ -22,6 +22,8 @@ const ACTION_LABELS: Record<string, string> = {
   "cash.register.updated": "Caixa atualizado",
   "cash.register.disabled": "Caixa desativado",
   "cash.session.opened": "Caixa aberto",
+  "cash.session.opened.override": "Caixa aberto (override admin)",
+  "cash.session.open.denied.not_owner": "Abertura negada (não é o dono)",
   "cash.session.closed": "Caixa fechado",
   "cash.session.closed_with_pending_override": "Caixa fechado com pendências (exceção)",
   "cash.session.close_blocked.pending_charges": "Fechamento bloqueado (Pix pendente)",
