@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { permissionKeys } from "@bitpix/contracts";
-import { CashRegisterStatus, prisma } from "@bitpix/database";
+import { CashRegisterStatus, prisma, UserStatus } from "@bitpix/database";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { hashSessionToken } from "../src/modules/auth/auth.service.js";
@@ -30,6 +30,9 @@ describe.sequential("controle operacional de caixa", () => {
   let ownerUserPublicId = "";
   let secondOwnerPublicId = "";
   let thirdOwnerId = "";
+  let patchRegisterPublicId = "";
+  let patchOwnerlessPublicId = "";
+  let inactiveOwnerPublicId = "";
 
   beforeAll(async () => {
     app = await buildApp();
@@ -118,6 +121,45 @@ describe.sequential("controle operacional de caixa", () => {
       },
     });
     thirdOwnerId = thirdOwner.id;
+
+    const patchOwner = await prisma.user.create({
+      data: {
+        companyId,
+        branchId,
+        name: "Dono Inicial Patch",
+        email: `cash-patch-owner-${suffix}@bitpix.test`,
+        normalizedEmail: `cash-patch-owner-${suffix}@bitpix.test`,
+        passwordHash: "not-used",
+      },
+    });
+    const patchOwnerless = await prisma.user.create({
+      data: {
+        companyId,
+        branchId,
+        name: "Dono Livre Patch",
+        email: `cash-patch-ownerless-${suffix}@bitpix.test`,
+        normalizedEmail: `cash-patch-ownerless-${suffix}@bitpix.test`,
+        passwordHash: "not-used",
+      },
+    });
+    patchOwnerlessPublicId = patchOwnerless.publicId;
+    const patchRegister = await prisma.cashRegister.create({
+      data: { companyId, branchId, code: "CX-PATCH", name: "Caixa para PATCH", ownerUserId: patchOwner.id, status: CashRegisterStatus.INACTIVE },
+    });
+    patchRegisterPublicId = patchRegister.publicId;
+
+    const inactiveOwnerCandidate = await prisma.user.create({
+      data: {
+        companyId,
+        branchId,
+        name: "Candidato Inativo",
+        email: `cash-inactive-owner-${suffix}@bitpix.test`,
+        normalizedEmail: `cash-inactive-owner-${suffix}@bitpix.test`,
+        passwordHash: "not-used",
+        status: UserStatus.INACTIVE,
+      },
+    });
+    inactiveOwnerPublicId = inactiveOwnerCandidate.publicId;
 
     const openOnlyRole = await prisma.role.create({
       data: { companyId, key: "CASH_OPEN_ONLY", name: "Operador dono" },
@@ -236,6 +278,17 @@ describe.sequential("controle operacional de caixa", () => {
     expect(response.json()).toMatchObject({ error: { code: "CASH_REGISTER_OWNER_TAKEN" } });
   });
 
+  it("recusa dono inelegível ao cadastrar caixa", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/cash-registers",
+      headers: { cookie: adminCookie },
+      payload: { branchPublicId, code: "CX-INVALID-OWNER", name: "Caixa com dono inválido", ownerUserPublicId: inactiveOwnerPublicId },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: { code: "CASH_REGISTER_OWNER_INVALID" } });
+  });
+
   it("impede código duplicado na mesma empresa e filial", async () => {
     const response = await app.inject({
       method: "POST",
@@ -256,6 +309,39 @@ describe.sequential("controle operacional de caixa", () => {
     });
     expect(response.statusCode).toBe(201);
     secondRegisterPublicId = response.json().data.publicId;
+  });
+
+  it("permite transferir o dono do caixa via PATCH", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/cash-registers/${patchRegisterPublicId}`,
+      headers: { cookie: adminCookie },
+      payload: { ownerUserPublicId: patchOwnerlessPublicId },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.owner).toMatchObject({ publicId: patchOwnerlessPublicId });
+  });
+
+  it("permite reenviar o mesmo dono no PATCH sem falso conflito", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/cash-registers/${patchRegisterPublicId}`,
+      headers: { cookie: adminCookie },
+      payload: { ownerUserPublicId: patchOwnerlessPublicId },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.owner).toMatchObject({ publicId: patchOwnerlessPublicId });
+  });
+
+  it("recusa via PATCH um dono que já pertence a outro caixa", async () => {
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/cash-registers/${patchRegisterPublicId}`,
+      headers: { cookie: adminCookie },
+      payload: { ownerUserPublicId: secondOwnerPublicId },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: { code: "CASH_REGISTER_OWNER_TAKEN" } });
   });
 
   it("impede abertura de caixa inativo", async () => {
@@ -459,6 +545,10 @@ describe.sequential("controle operacional de caixa", () => {
     });
     expect(response.statusCode).toBe(403);
     expect(response.json()).toMatchObject({ error: { code: "CASH_REGISTER_NOT_OWNER" } });
+    const audit = await prisma.auditLog.findFirst({
+      where: { companyId, action: "cash.session.open.denied.not_owner", outcome: "FAILURE" },
+    });
+    expect(audit).not.toBeNull();
   });
 
   it("permite admin com override abrir caixa de outro dono e audita", async () => {

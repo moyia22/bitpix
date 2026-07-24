@@ -124,6 +124,15 @@ export function isUniqueConstraintError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 }
 
+export function uniqueConstraintTarget(error: unknown): string[] {
+  if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") {
+    const target = (error as { meta?: { target?: unknown } }).meta?.target;
+    if (Array.isArray(target)) return target.map(String);
+    if (typeof target === "string") return [target];
+  }
+  return [];
+}
+
 export function movementLabel(type: CashMovementType): string {
   const labels: Record<CashMovementType, string> = {
     OPENING_BALANCE: "Saldo inicial",

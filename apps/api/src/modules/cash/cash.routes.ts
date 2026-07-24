@@ -34,6 +34,7 @@ import {
   moneyFromCents,
   moneyToString,
   serializeCashSession,
+  uniqueConstraintTarget,
 } from "./cash.service.js";
 
 async function findScopedRegister(request: FastifyRequest, publicId: string) {
@@ -127,7 +128,13 @@ function registerResponse(register: {
   owner: { publicId: string; name: string } | null;
 }) {
   return {
-    ...register,
+    publicId: register.publicId,
+    code: register.code,
+    name: register.name,
+    description: register.description,
+    status: register.status,
+    branch: register.branch,
+    owner: register.owner,
     createdAt: register.createdAt.toISOString(),
     updatedAt: register.updatedAt.toISOString(),
   };
@@ -197,6 +204,9 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(201).send({ data: registerResponse(register) });
     } catch (error) {
       if (isUniqueConstraintError(error)) {
+        if (uniqueConstraintTarget(error).includes("ownerUserId")) {
+          throw new AppError(409, "CASH_REGISTER_OWNER_TAKEN", "Este usuário já é dono de outro caixa.");
+        }
         throw new AppError(409, "CASH_REGISTER_CODE_EXISTS", "Já existe um caixa com este código na filial.");
       }
       throw error;
@@ -240,14 +250,17 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
             entity: "CashRegister",
             entityPublicId: register.publicId,
             branchId: register.branchId,
-            before: { code: register.code, name: register.name, description: register.description },
-            after: { code: result.code, name: result.name, description: result.description },
+            before: { code: register.code, name: register.name, description: register.description, ownerUserPublicId: register.owner?.publicId ?? null },
+            after: { code: result.code, name: result.name, description: result.description, ownerUserPublicId: result.owner?.publicId ?? null },
           });
           return result;
         });
         return { data: registerResponse(updated) };
       } catch (error) {
         if (isUniqueConstraintError(error)) {
+          if (uniqueConstraintTarget(error).includes("ownerUserId")) {
+            throw new AppError(409, "CASH_REGISTER_OWNER_TAKEN", "Este usuário já é dono de outro caixa.");
+          }
           throw new AppError(409, "CASH_REGISTER_CODE_EXISTS", "Já existe um caixa com este código na filial.");
         }
         throw error;
@@ -316,6 +329,7 @@ export async function cashRoutes(app: FastifyInstance): Promise<void> {
         action: "cash.session.open.denied.not_owner",
         entity: "CashRegister",
         entityPublicId: register.publicId,
+        branchId: register.branchId,
         outcome: AuditOutcome.FAILURE,
         metadata: { ownerUserId: register.ownerUserId },
       });
