@@ -140,7 +140,7 @@ export function UserManager({
     try {
       if (stepUp.kind === "delete") {
         const result = (await call(`/users/${stepUp.user.publicId}`, { method: "DELETE", body: JSON.stringify({ mfaCode: code }) })) as { data?: { deleted?: boolean } };
-        setNotice(result.data?.deleted ? `${stepUp.user.name} foi excluído.` : `${stepUp.user.name} possui histórico e foi desativado.`);
+        setNotice(result.data?.deleted ? `${stepUp.user.name} foi excluído (histórico preservado).` : `${stepUp.user.name} foi removido.`);
       } else {
         await call(`/users/${stepUp.user.publicId}/reset-mfa`, { method: "POST", body: JSON.stringify({ mfaCode: code }) });
         setNotice(`2FA de ${stepUp.user.name} redefinido.`);
@@ -278,7 +278,7 @@ export function UserManager({
       {stepUp && (
         <StepUpModal
           title={stepUp.kind === "delete" ? `Excluir ${stepUp.user.name}` : `Redefinir 2FA de ${stepUp.user.name}`}
-          description={stepUp.kind === "delete" ? "Exclui a conta se não houver histórico; caso contrário, ela é desativada. Confirme com seu código 2FA." : "O usuário precisará configurar o 2FA novamente. Confirme com seu código 2FA."}
+          description={stepUp.kind === "delete" ? "Remove a conta, o acesso e o caixa do usuário. O histórico financeiro é preservado. Confirme com seu código 2FA." : "O usuário precisará configurar o 2FA novamente. Confirme com seu código 2FA."}
           busy={busy}
           error={modalError}
           onConfirm={(code) => void runStepUp(code)}

@@ -17,6 +17,7 @@
     "deploy": "prisma migrate deploy",
     "seed": "tsx prisma/seed.ts",
     "create-user": "tsx prisma/create-user.ts",
+    "backfill-caixas": "tsx prisma/backfill-user-cashregisters.ts",
     "studio": "prisma studio",
     "build": "prisma generate && tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch",

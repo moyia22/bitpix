@@ -101,6 +101,7 @@ export default async function CashPage() {
         initialMovements={movements}
         branches={branches}
         owners={owners}
+        currentUserPublicId={principal.user.publicId}
         permissions={principal.permissions}
       />
     </div>

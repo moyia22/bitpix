@@ -36,6 +36,7 @@ interface CashConsoleProps {
   initialMovements: PaginatedDto<CashMovementDto>;
   branches: BranchOption[];
   owners: { publicId: string; name: string }[];
+  currentUserPublicId: string;
   permissions: PermissionKey[];
 }
 
@@ -91,6 +92,7 @@ function elapsedTime(openedAt: string, now: number): string {
 
 export function CashConsole({
   initialRegisters,
+  currentUserPublicId,
   initialSession,
   initialMovements,
   branches,
@@ -109,7 +111,9 @@ export function CashConsole({
   const [now, setNow] = useState(() => Date.now());
   const [openingCents, setOpeningCents] = useState(0);
   const [selectedRegister, setSelectedRegister] = useState(
-    initialRegisters.find((register) => register.status === "ACTIVE")?.publicId ?? "",
+    initialRegisters.find((register) => register.status === "ACTIVE" && register.owner?.publicId === currentUserPublicId)?.publicId
+      ?? initialRegisters.find((register) => register.status === "ACTIVE")?.publicId
+      ?? "",
   );
   const [openingNote, setOpeningNote] = useState("");
   const [movementCents, setMovementCents] = useState(0);
@@ -286,6 +290,15 @@ export function CashConsole({
   const expectedCents = session ? Math.round(Number(session.totals.expectedBalance) * 100) : 0;
   const discrepancyCents = countedCents - expectedCents;
   const activeRegisters = registers.filter((register) => register.status === "ACTIVE");
+  // Isolamento por usuário: quem NÃO tem o override (cash.session.open.any) só vê/abre o
+  // próprio caixa; quem tem (admin) enxerga e opera todos.
+  const seesAllRegisters = permissionSet.has("cash.session.open.any");
+  const openableRegisters = seesAllRegisters
+    ? activeRegisters
+    : activeRegisters.filter((register) => register.owner?.publicId === currentUserPublicId);
+  const visibleRegisters = seesAllRegisters
+    ? registers
+    : registers.filter((register) => register.owner?.publicId === currentUserPublicId);
   const metricItems: Array<{ label: string; value: string; Icon: LucideIcon }> = session ? [
     { label: "Saldo inicial", value: session.totals.openingBalance, Icon: WalletCards },
     { label: "Suprimentos", value: session.totals.supplies, Icon: ArrowDownToLine },
@@ -323,7 +336,7 @@ export function CashConsole({
             <label className="field-label" htmlFor="cash-register">Caixa ou terminal</label>
             <select className="field-input" id="cash-register" value={selectedRegister} onChange={(event) => setSelectedRegister(event.target.value)} required>
               <option value="">Selecione um caixa</option>
-              {activeRegisters.map((register) => <option value={register.publicId} key={register.publicId}>{register.code} · {register.name}</option>)}
+              {openableRegisters.map((register) => <option value={register.publicId} key={register.publicId}>{register.code} · {register.name}</option>)}
             </select>
             <div className="cash-form-grid">
               <div>
@@ -451,7 +464,7 @@ export function CashConsole({
           </form>
         )}
         <div className="cash-register-list">
-          {registers.map((register) => <article key={register.publicId}><span className="cash-register-icon"><Store size={18} /></span><div><strong>{register.name}</strong><small>{register.code} · {register.branch.name}{register.owner ? ` · Dono: ${register.owner.name}` : " · Sem dono"}</small></div><span className={register.status === "ACTIVE" ? "cash-status-active" : "cash-status-inactive"}>{register.status === "ACTIVE" ? "Ativo" : "Inativo"}</span>{register.status === "ACTIVE" && permissionSet.has("cash.register.disable") && <button type="button" disabled={busy || session?.cashRegister.publicId === register.publicId} onClick={() => void disableRegister(register)}>Desativar</button>}</article>)}
+          {visibleRegisters.map((register) => <article key={register.publicId}><span className="cash-register-icon"><Store size={18} /></span><div><strong>{register.name}</strong><small>{register.code} · {register.branch.name}{register.owner ? ` · Dono: ${register.owner.name}` : " · Sem dono"}</small></div><span className={register.status === "ACTIVE" ? "cash-status-active" : "cash-status-inactive"}>{register.status === "ACTIVE" ? "Ativo" : "Inativo"}</span>{register.status === "ACTIVE" && permissionSet.has("cash.register.disable") && <button type="button" disabled={busy || session?.cashRegister.publicId === register.publicId} onClick={() => void disableRegister(register)}>Desativar</button>}</article>)}
         </div>
       </section>
     </div>
