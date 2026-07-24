@@ -3,6 +3,8 @@ import {
   changePasswordSchema,
   createUserSchema,
   loginSchema,
+  mfaDisableSchema,
+  passwordConfirmationSchema,
   resetPasswordSchema,
   setPasswordSchema,
 } from "@bitpix/contracts";
@@ -33,5 +35,10 @@ describe("senha mínima de 6 caracteres", () => {
     expect(changePasswordSchema.safeParse({ currentPassword: "abc123", newPassword: "abc456" }).success).toBe(true);
     expect(setPasswordSchema.safeParse({ password: "abc123", mfaCode: "123456" }).success).toBe(true);
     expect(resetPasswordSchema.safeParse({ token: "t".repeat(32), password: "abc123" }).success).toBe(true);
+  });
+
+  it("aceita senha de 6 na reconfirmação e no disable de MFA", () => {
+    expect(passwordConfirmationSchema.safeParse({ password: "abc123" }).success).toBe(true);
+    expect(mfaDisableSchema.safeParse({ password: "abc123", code: "123456" }).success).toBe(true);
   });
 });

@@ -83,9 +83,9 @@ export const loginSchema = z.object({
   recoveryCode: z.string().trim().regex(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/).optional(),
 });
 
-export const passwordConfirmationSchema = z.object({ password: z.string().min(8).max(128) });
+export const passwordConfirmationSchema = z.object({ password: z.string().min(6).max(128) });
 export const mfaCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
-export const mfaDisableSchema = z.object({ password: z.string().min(8).max(128), code: z.string().trim().regex(/^\d{6}$/) });
+export const mfaDisableSchema = z.object({ password: z.string().min(6).max(128), code: z.string().trim().regex(/^\d{6}$/) });
 export const forgotPasswordSchema = z.object({ email: z.email().transform((value) => value.trim().toLowerCase()) });
 export const resetPasswordSchema = z.object({ token: z.string().min(32).max(256), password: z.string().min(6).max(128) });
 

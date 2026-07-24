@@ -65,7 +65,7 @@ export function LoginForm() {
       <div>
         <label className="field-label" htmlFor="password">Senha</label>
         <div className="relative">
-          <input className="field-input pr-14" id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required minLength={8} />
+          <input className="field-input pr-14" id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required minLength={6} />
           <button type="button" className="absolute right-1 top-1 grid h-11 w-11 place-items-center rounded-lg text-[var(--ink-muted)] transition-colors hover:bg-[var(--surface-muted)] hover:text-[var(--ink)]" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>
             {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
           </button>
