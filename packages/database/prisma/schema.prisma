@@ -335,6 +335,7 @@ model User {
   auditLogs            AuditLog[]
   operatedCashSessions CashSession[]            @relation("CashSessionOperator")
   closedCashSessions   CashSession[]            @relation("CashSessionCloser")
+  ownedCashRegisters   CashRegister[]           @relation("CashRegisterOwner")
   createdCashMovements CashMovement[]
   sales                Sale[]
   configuredProviders  ProviderConfiguration[]  @relation("ProviderConfiguredBy")
@@ -485,14 +486,17 @@ model CashRegister {
   code         String             @db.VarChar(30)
   name         String             @db.VarChar(100)
   description  String?            @db.VarChar(240)
+  ownerUserId  String?
   status       CashRegisterStatus @default(ACTIVE)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @updatedAt
   company      Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   branch       Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  owner        User?              @relation("CashRegisterOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
   cashSessions CashSession[]
 
   @@unique([companyId, branchId, code])
+  @@unique([ownerUserId])
   @@index([companyId, status])
   @@index([branchId, status])
   @@index([createdAt])
