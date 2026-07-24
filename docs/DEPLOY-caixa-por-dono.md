@@ -42,6 +42,20 @@ Empresas **novas** (criadas após o deploy) já recebem a permissão automaticam
 
 > Observação: rodar o `seed` completo em produção também registra a permissão, mas ele faz upserts das contas de demonstração do seed — prefira um script de backfill direcionado se não quiser tocar essas contas.
 
+## Atualizar na VPS (Docker)
+
+A imagem roda `prisma generate` no build (o client Prisma é gitignored, então é gerado no build) e o `turbo` constrói `contracts`/`database` antes de `api`/`web`. Passos:
+
+```bash
+git pull origin main
+docker compose -f docker-compose.vps.yml build          # reconstrói a imagem com o código novo
+docker compose -f docker-compose.vps.yml run --rm migrate # prisma migrate deploy (idempotente; já aplicado)
+docker compose -f docker-compose.vps.yml up -d            # api, web, worker
+```
+
+- A **migração já foi aplicada** no Supabase; o serviço `migrate` só confirma (no-op).
+- O **backfill já foi executado**; usuários novos recebem caixa automaticamente. Rode `docker compose -f docker-compose.vps.yml run --rm --entrypoint "" migrate npm run backfill-caixas -w @bitpix/database` apenas se algum usuário tiver sido criado fora do app.
+
 ## Senha mínima de 6
 
 Sem passo de deploy. Passa a valer para novos cadastros/trocas de senha assim que o app novo subir. Senhas existentes continuam válidas.
